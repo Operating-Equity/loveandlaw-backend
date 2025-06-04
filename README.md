@@ -54,18 +54,13 @@ This system provides a 24×7 family law assistant that:
    pip install -r requirements.txt
    ```
 
-3. **Install additional dependencies**
-   ```bash
-   python -m spacy download en_core_web_sm
-   ```
-
-4. **Configure environment**
+3. **Configure environment**
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and configuration
    ```
 
-5. **Run the application**
+4. **Run the application**
    ```bash
    python main.py
    ```

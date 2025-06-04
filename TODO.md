@@ -13,7 +13,6 @@ cp .env.example .env
 
 # 3. Install dependencies
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
 
 # 4. Populate lawyer data
 python scripts/populate_lawyers.py
@@ -32,7 +31,6 @@ python test_connection.py
 - [ ] Install and start Redis locally (Docker: `docker run -d -p 6379:6379 redis:alpine`)
 - [ ] Set up .env file with API keys (copy from .env.example)
 - [ ] Install Python dependencies: `pip install -r requirements.txt`
-- [ ] Download spaCy model: `python -m spacy download en_core_web_sm`
 
 ### Data Setup
 - [ ] Run Elasticsearch to create index: `python scripts/populate_lawyers.py`
@@ -206,10 +204,9 @@ python test_connection.py
 ## Environment Setup Required
 
 1. Install Python dependencies: `pip install -r requirements.txt`
-2. Download spaCy model: `python -m spacy download en_core_web_sm`
-3. Set up local DynamoDB (or configure AWS credentials)
-4. Set up local Elasticsearch (or use AWS OpenSearch)
-5. Configure environment variables from .env.example
+2. Set up local DynamoDB (or configure AWS credentials)
+3. Set up local Elasticsearch (or use AWS OpenSearch)
+4. Configure environment variables from .env.example
 
 ## Testing the Application
 
