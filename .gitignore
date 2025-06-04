@@ -61,7 +61,6 @@ logs/
 .aws/
 
 # ML Models Cache
-models/
 .cache/
 
 # Temporary files
