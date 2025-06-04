@@ -53,10 +53,10 @@ class Settings(BaseSettings):
     # Model Configuration
     listener_model: str = "gpt-4o"
     advisor_model: str = "gpt-4o"
-    emotion_model: str = "llama-3.3-70b-versatile"
-    signal_extract_model: str = "llama-3.3-70b-versatile"
-    alliance_model: str = "llama-3.3-70b-versatile"
-    safety_model: str = "llama-3.3-70b-versatile"
+    emotion_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
+    signal_extract_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
+    alliance_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
+    safety_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
     
     # CORS Configuration
     cors_origins: List[str] = Field(default=["*"], env="CORS_ORIGINS")

@@ -244,6 +244,15 @@ class ChatEdgeService:
                 "cards": result["lawyer_cards"]
             })
         
+        # Send reflection data if needed
+        if result.get("reflection", {}).get("needs_reflection"):
+            await connection.send_message({
+                "type": "reflection",
+                "cid": cid,
+                "reflection_type": result["reflection"]["reflection_type"],
+                "reflection_insights": result["reflection"]["reflection_insights"]
+            })
+        
         # Send suggestions
         if result.get("suggestions"):
             await connection.send_message({

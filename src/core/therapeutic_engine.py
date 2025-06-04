@@ -15,6 +15,7 @@ from src.agents.research_agent import ResearchAgent
 from src.agents.matcher_agent import MatcherAgent
 from src.agents.advisor_agent import AdvisorAgent
 from src.agents.progress_tracker import ProgressTracker
+from src.agents.reflection_agent import ReflectionAgent
 from src.services.database import dynamodb_service, elasticsearch_service
 from src.utils.logger import get_logger
 
@@ -35,7 +36,8 @@ class TherapeuticEngine:
             "research": ResearchAgent(),
             "matcher": MatcherAgent(),
             "advisor": AdvisorAgent(),
-            "progress": ProgressTracker()
+            "progress": ProgressTracker(),
+            "reflection": ReflectionAgent()
         }
         
         # Initialize the graph
@@ -53,13 +55,15 @@ class TherapeuticEngine:
         workflow.add_node("safety_check", self._safety_check)
         workflow.add_node("fetch_context", self._fetch_context)
         workflow.add_node("parallel_analysis", self._parallel_analysis)
+        workflow.add_node("reflection_check", self._reflection_check)
         workflow.add_node("advisor_compose", self._advisor_compose)
         workflow.add_node("persist_state", self._persist_state)
         
         # Add edges
         workflow.add_edge("safety_check", "fetch_context")
         workflow.add_edge("fetch_context", "parallel_analysis")
-        workflow.add_edge("parallel_analysis", "advisor_compose")
+        workflow.add_edge("parallel_analysis", "reflection_check")
+        workflow.add_edge("reflection_check", "advisor_compose")
         workflow.add_edge("advisor_compose", "persist_state")
         workflow.add_edge("persist_state", END)
         
@@ -114,7 +118,13 @@ class TherapeuticEngine:
                 },
                 "progress": result.get("progress_info", {}),
                 "milestone_celebrations": result.get("milestone_celebrations", []),
-                "scheduled_check_ins": result.get("scheduled_check_ins", [])
+                "scheduled_check_ins": result.get("scheduled_check_ins", []),
+                "reflection": {
+                    "needs_reflection": result.get("needs_reflection", False),
+                    "reflection_type": result.get("reflection_type"),
+                    "reflection_prompts": result.get("reflection_prompts", []),
+                    "reflection_insights": result.get("reflection_insights", [])
+                }
             }
             
         except Exception as e:
@@ -219,6 +229,30 @@ class TherapeuticEngine:
         
         return state
     
+    async def _reflection_check(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Check if reflection is needed and generate reflection content"""
+        
+        if state.get("skip_remaining_agents"):
+            return state
+        
+        turn_state = TurnState(**state["turn_state"])
+        context = {
+            **state["context"],
+            "conversation_summary": state["context"].get("conversation_summary", []),
+            "user_profile": state["context"].get("user_profile", {})
+        }
+        
+        # Run reflection agent
+        reflection_result = await self.agents["reflection"].process(turn_state, context)
+        
+        # Add reflection data to state
+        state["needs_reflection"] = reflection_result.get("needs_reflection", False)
+        state["reflection_type"] = reflection_result.get("reflection_type")
+        state["reflection_prompts"] = reflection_result.get("reflection_prompts", [])
+        state["reflection_insights"] = reflection_result.get("reflection_insights", [])
+        
+        return state
+    
     async def _advisor_compose(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Phase 2: Compose final response"""
         
@@ -234,7 +268,11 @@ class TherapeuticEngine:
             "research_sources": state.get("research_sources", []),
             "progress_info": state.get("progress_info", {}),
             "milestone_celebrations": state.get("milestone_celebrations", []),
-            "progress_insights": state.get("progress_insights", [])
+            "progress_insights": state.get("progress_insights", []),
+            "needs_reflection": state.get("needs_reflection", False),
+            "reflection_type": state.get("reflection_type"),
+            "reflection_prompts": state.get("reflection_prompts", []),
+            "reflection_insights": state.get("reflection_insights", [])
         }
         
         # Get final response

@@ -107,7 +107,8 @@ Front‑end integrations (ElevenLabs, HeyGen, avatar streaming) remain client‑
 | 1     | **AllianceMeter** *(NEW)* | Groq Llama‑4 model scoring bond / goal / task from latest exchange; writes to state                                                            | Mean latency ≤ 30 ms p95                     |
 | 1     | ResearchAgent             | On‑demand external legal search when needed                                                                                                    | Timeout‑tolerant                             |
 | 1     | MatcherAgent              | Elasticsearch (BM25 + dense vector) → up to 5 lawyer cards with match\_score; can trigger Exa or Perplexity research APIs based on user prompt | Skipped if distress > 6                      |
-| 2     | **AdvisorAgent**          | GPT‑4o composes final reply using: Listener draft + legal guidance + lawyer cards + progress nudges                                            | Uses Adaptive Empathy prompt described below |
+| 1.5   | **ReflectionAgent**       | Checks if reflection is appropriate; generates prompts for journey/emotional/decision reflection; provides progress insights                    | Triggers on milestones, emotional shifts     |
+| 2     | **AdvisorAgent**          | GPT‑4o composes final reply using: Listener draft + legal guidance + lawyer cards + progress nudges + reflection prompts                       | Uses Adaptive Empathy prompt described below |
 | 2     | ProgressTracker           | Updates progress\_markers; schedules event‑based check‑ins via automations                                                                     |                                              |
 | 2     | **SuggestionAgent**       | Generates 3–5 context‑aware “Suggested questions” users can click; showcases available tools (e.g., “What forms do I need to file next?”)      | Sends `suggestions` frame to client          |
 
@@ -188,6 +189,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 | client→server | `user_msg`              | `{cid, text}`                                 |
 | server→client | `ai_chunk`              | `{cid, text_fragment}`                        |
 | server→client | `cards`                 | `[ {id,name,firm,match_score,blurb,link} … ]` |
+| server→client | `reflection`            | `{cid, reflection_type, reflection_insights}` |
 | server→client | `suggestions`           | `{cid, suggestions:[text,…]}`                 |
 | either        | `heartbeat`             | `{}`                                          |
 | server→client | `error` / `session_end` | `{code, message}`                             |
@@ -272,8 +274,9 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
   - ProfileAgent: User profile management with caching and emotional timeline
   - ResearchAgent: Context-aware legal research with synthesis
   - MatcherAgent: Advanced lawyer matching with semantic search and personalization
-- **Therapeutic Engine**: LangGraph orchestration with proper state management
-- **WebSocket Handler**: Full duplex communication with streaming support
+  - **ReflectionAgent**: Helps users reflect on their journey, emotional progress, and decisions through contextual prompts
+- **Therapeutic Engine**: LangGraph orchestration with proper state management including reflection node
+- **WebSocket Handler**: Full duplex communication with streaming support and reflection data
 - **REST API**: Match lawyers, upload CSV, get profiles
 - **Security**: JWT authentication framework
 
@@ -282,7 +285,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 - **Framework**: FastAPI for REST, native websockets for real-time
 - **AI Models**: 
   - OpenAI GPT-4o for listener/advisor (high quality responses)
-  - Groq Llama-3.3-70b for quick analysis (emotion, alliance, signals)
+  - Groq meta-llama/llama-4-maverick-17b-128e-instruct for quick analysis (emotion, alliance, signals)
 - **State Management**: LangGraph for complex conversational flows
 - **Data Storage**: AWS-native (DynamoDB, OpenSearch) with local dev support
 

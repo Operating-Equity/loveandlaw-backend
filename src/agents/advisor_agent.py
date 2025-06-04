@@ -29,7 +29,18 @@ class AdvisorAgent(BaseAgent):
         listener_draft = context.get("listener_draft", "")
         lawyer_cards = context.get("lawyer_cards", [])
         legal_guidance = context.get("legal_guidance", "")
-        suggestions = await self._generate_suggestions(state, context)
+        
+        # Get reflection data
+        needs_reflection = context.get("needs_reflection", False)
+        reflection_type = context.get("reflection_type")
+        reflection_prompts = context.get("reflection_prompts", [])
+        reflection_insights = context.get("reflection_insights", [])
+        
+        suggestions = await self._generate_suggestions(
+            state, 
+            context,
+            reflection_prompts=reflection_prompts if needs_reflection else []
+        )
         
         # Compose adaptive response
         final_response = await self._compose_adaptive_response(
@@ -37,7 +48,13 @@ class AdvisorAgent(BaseAgent):
             listener_draft,
             legal_guidance,
             lawyer_cards,
-            context
+            context,
+            reflection_data={
+                "needs_reflection": needs_reflection,
+                "reflection_type": reflection_type,
+                "reflection_prompts": reflection_prompts,
+                "reflection_insights": reflection_insights
+            }
         )
         
         return {
@@ -52,7 +69,8 @@ class AdvisorAgent(BaseAgent):
         listener_draft: str,
         legal_guidance: str,
         lawyer_cards: List[LawyerCard],
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        reflection_data: Dict[str, Any]
     ) -> str:
         """Compose response with adaptive empathy"""
         
@@ -72,11 +90,13 @@ Components available:
 1. Empathetic opening: {listener_draft}
 2. Legal guidance: {legal_guidance or 'None yet'}
 3. Lawyer matches: {len(lawyer_cards)} available
+4. Reflection needed: {reflection_data['needs_reflection']} (type: {reflection_data.get('reflection_type', 'none')})
 
 Adaptive Empathy Rules:
 - If distress >= 7: Focus on emotional support, minimal practical advice
 - If engagement <= 3: Use open questions, offer choices, increase warmth
 - If any alliance score <= 4: Rebuild connection before advice
+- If reflection is needed: Incorporate one reflection prompt naturally into the response
 - Always end with autonomy-preserving choice (what they'd like to focus on)
 
 Response structure:
@@ -86,11 +106,24 @@ Response structure:
 
 Keep response under 200 words."""
 
+        # Add reflection context if needed
+        reflection_context = ""
+        if reflection_data['needs_reflection'] and reflection_data.get('reflection_prompts'):
+            reflection_context = f"""
+
+Reflection prompts to potentially incorporate:
+{chr(10).join(f"- {prompt}" for prompt in reflection_data['reflection_prompts'][:2])}
+
+Reflection insights about their journey:
+{chr(10).join(f"- {insight}" for insight in reflection_data.get('reflection_insights', [])[:2])}
+"""
+
         user_prompt = f"""Create the final response for this situation:
 
 User said: "{state.user_text}"
-
-Craft a response following the adaptive empathy rules and structure above."""
+{reflection_context}
+Craft a response following the adaptive empathy rules and structure above.
+If reflection is needed, naturally weave in ONE reflection prompt into your response."""
 
         try:
             response = await self.openai_client.chat.completions.create(
@@ -150,10 +183,19 @@ Craft a response following the adaptive empathy rules and structure above."""
         
         return strategies.get(strategy, "Provide balanced support and guidance")
     
-    async def _generate_suggestions(self, state: TurnState, context: Dict[str, Any]) -> List[str]:
+    async def _generate_suggestions(
+        self, 
+        state: TurnState, 
+        context: Dict[str, Any],
+        reflection_prompts: List[str] = []
+    ) -> List[str]:
         """Generate contextual suggestions for user"""
         
         suggestions = []
+        
+        # Add reflection prompts if available (prioritize these)
+        if reflection_prompts:
+            suggestions.extend(reflection_prompts[:2])
         
         # Based on legal intent
         if "divorce" in state.legal_intent:
