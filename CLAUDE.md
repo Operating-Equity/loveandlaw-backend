@@ -104,7 +104,7 @@ Front‑end integrations (ElevenLabs, HeyGen, avatar streaming) remain client‑
 | 1     | **ListenerAgent**         | GPT‑4o produces reflective draft; begins token stream after ≈ 30 tokens                                                                        | Tone informed by profile                     |
 | 1     | **EmotionGauge**          | Groq Llama‑4 infers sentiment & engagement\_level (1‑10)                                                                                       | Lightweight prompt                           |
 | 1     | **SignalExtract**         | Groq Llama‑4 extracts structured facts (zip, dates, relations, etc.) & embeds them                                                             | Replaces regex/spaCy                         |
-| 1     | **AllianceMeter** *(NEW)* | Groq Llama‑4 model scoring bond / goal / task from latest exchange; writes to state                                                            | Mean latency ≤ 30 ms p95                     |
+| 1     | **AllianceMeter**       | Groq Llama‑4 model scoring bond / goal / task from latest exchange; writes to state                                                            | Mean latency ≤ 30 ms p95                     |
 | 1     | ResearchAgent             | On‑demand external legal search when needed                                                                                                    | Timeout‑tolerant                             |
 | 1     | MatcherAgent              | Elasticsearch (BM25 + dense vector) → up to 5 lawyer cards with match\_score; can trigger Exa or Perplexity research APIs based on user prompt | Skipped if distress > 6                      |
 | 1.5   | **ReflectionAgent**       | Checks if reflection is appropriate; generates prompts for journey/emotional/decision reflection; provides progress insights                    | Triggers on milestones, emotional shifts     |
@@ -204,17 +204,6 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 
 ---
 
-## 7 · Security, Privacy & Compliance
-
-* Edge redaction of phone, email, SSN, addresses before storage.
-* Attribute‑based access control – JWT scopes: *user*, *lawyer\_admin*, *ops*.
-* Encrypt‑at‑rest & in‑transit (AWS KMS + TLS 1.3).
-* GDPR tooling – data export & right‑to‑delete Lambdas.
-* Immutable audit trails in S3 + CloudTrail.
-* Ethical guardrails – SafetyAgent, transparent AI banners, no dark patterns, FTC compliance.
-
----
-
 ## 8 · Observability & Continuous Learning
 
 * **Metrics** – p95 latency, distress distribution, engagement\_level, alliance\_bond/goal/task, match click‑through, retention cohorts.
@@ -222,17 +211,6 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 * **Quality Audits** – weekly human review of 1 % randomly sampled conversations.
 * **Model Refinement** – offline analysis of legal outcomes (form completion, lawyer contact) guides prompt/routing updates – *never* vanity engagement metrics alone.
 
----
-
-## 9 · Roadmap Enhancements
-
-| Stage | Enhancement                                    | Expected Benefit                                             |
-| ----- | ---------------------------------------------- | ------------------------------------------------------------ |
-| Q3    | Spanish & Mandarin language tracks             | Broader access                                               |
-| Q3    | Voice diarisation at Edge                      | Accessibility (voice notes)                                  |
-| Q4    | Court‑date ICS import                          | Automated reminders                                          |
-| Q4    | Reinforcement learning on legal‑outcome reward | Conversational quality tuned to real success                 |
-| TBD   | Human mediator loop                            | Opt‑in paraprofessional support for complex custody disputes |
 
 ---
 
@@ -266,7 +244,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 - **PII Redaction**: Presidio + LLM-based redaction service
 - **Therapeutic Agents**:
   - SafetyAgent: Crisis detection with keyword/pattern matching + LLM
-  - ListenerAgent: GPT-4o empathetic response generation
+  - ListenerAgent: GPT-4.1 empathetic response generation
   - EmotionGauge: Sentiment and engagement analysis
   - AllianceMeter: Bond/Goal/Task measurement
   - SignalExtractAgent: Structured data extraction
@@ -284,7 +262,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 - **Language**: Python 3.13+ for async support and ML ecosystem
 - **Framework**: FastAPI for REST, native websockets for real-time
 - **AI Models**: 
-  - OpenAI GPT-4o for listener/advisor (high quality responses)
+  - OpenAI GPT-4.1 for listener/advisor (high quality responses)
   - Groq meta-llama/llama-4-maverick-17b-128e-instruct for quick analysis (emotion, alliance, signals)
 - **State Management**: LangGraph for complex conversational flows
 - **Data Storage**: AWS-native (DynamoDB, OpenSearch) with local dev support
