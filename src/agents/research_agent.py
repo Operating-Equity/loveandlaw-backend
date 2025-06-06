@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 import asyncio
 import aiohttp
-from openai import AsyncOpenAI
+from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState
 from src.config.settings import settings
@@ -16,7 +16,7 @@ class ResearchAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("research")
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
         self.timeout = aiohttp.ClientTimeout(total=10)
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -83,8 +83,8 @@ Legal context: {', '.join(state.legal_intent)}
 
 Reply with just YES or NO:"""
 
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = await self.groq_client.chat.completions.create(
+                model=settings.signal_extract_model,  # Using fast extraction model
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=10
@@ -116,12 +116,12 @@ Location: {location or 'Unknown'}
 Format as a JSON array of query strings:"""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = await self.groq_client.chat.completions.create(
+                model=settings.signal_extract_model,  # Using fast extraction model
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=200,
-                response_format={"type": "json_object"}
+                max_tokens=200
+                # Note: Groq doesn't support response_format parameter
             )
             
             result = json.loads(response.choices[0].message.content)
@@ -160,8 +160,8 @@ Context: User in {state.facts.get('state', 'US')} dealing with {', '.join(state.
 
 Provide a concise, factual response:"""
 
-                response = await self.openai_client.chat.completions.create(
-                    model="gpt-4o",
+                response = await self.groq_client.chat.completions.create(
+                    model=settings.advisor_model,  # Using advisor model for research
                     messages=[{"role": "user", "content": research_prompt}],
                     temperature=0.2,
                     max_tokens=300
@@ -210,8 +210,8 @@ Research findings:
 Provide a brief, practical summary (2-3 paragraphs):"""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o",
+            response = await self.groq_client.chat.completions.create(
+                model=settings.advisor_model,  # Using advisor model for synthesis
                 messages=[{"role": "user", "content": synthesis_prompt}],
                 temperature=0.3,
                 max_tokens=400

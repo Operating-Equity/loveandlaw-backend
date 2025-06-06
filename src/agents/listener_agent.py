@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 import asyncio
-from openai import AsyncOpenAI
+from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState
 from src.config.settings import settings
@@ -14,7 +14,7 @@ class ListenerAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("listener")
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
         """Generate initial empathetic response"""
@@ -77,7 +77,7 @@ Recent context:
 Provide a brief, therapeutic response that shows understanding and validates their experience."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
+            response = await self.groq_client.chat.completions.create(
                 model=settings.listener_model,
                 messages=[
                     {"role": "system", "content": system_prompt},

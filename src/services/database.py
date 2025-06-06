@@ -1,11 +1,8 @@
-import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import aioboto3
-from motor.motor_asyncio import AsyncIOMotorClient
 from elasticsearch import AsyncElasticsearch
 import redis.asyncio as redis
-import json
 from src.config.settings import settings
 from src.utils.logger import get_logger
 
@@ -197,7 +194,7 @@ class ElasticsearchService:
                     "budget_range": {"type": "keyword"},
                     "rating": {"type": "float"},
                     "reviews_count": {"type": "integer"},
-                    "embedding": {"type": "dense_vector", "dims": 1536}  # For OpenAI embeddings
+                    "embedding": {"type": "dense_vector", "dims": 1536}  # For text embeddings
                 }
             }
         }

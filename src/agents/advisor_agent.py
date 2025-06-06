@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from openai import AsyncOpenAI
+from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState, LawyerCard
 from src.config.settings import settings
@@ -13,7 +13,7 @@ class AdvisorAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("advisor")
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
         """Compose final advisor response"""
@@ -126,7 +126,7 @@ Craft a response following the adaptive empathy rules and structure above.
 If reflection is needed, naturally weave in ONE reflection prompt into your response."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
+            response = await self.groq_client.chat.completions.create(
                 model=settings.advisor_model,
                 messages=[
                     {"role": "system", "content": system_prompt},

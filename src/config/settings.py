@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     debug: bool = Field(default=True, env="DEBUG")
     
     # API Keys
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     groq_api_key: str = Field(..., env="GROQ_API_KEY")
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
     
@@ -51,8 +50,8 @@ class Settings(BaseSettings):
     max_summary_turns: int = 10
     
     # Model Configuration
-    listener_model: str = "gpt-4o"
-    advisor_model: str = "gpt-4o"
+    listener_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
+    advisor_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
     emotion_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
     signal_extract_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"
     alliance_model: str = "meta-llama/llama-4-maverick-17b-128e-instruct"

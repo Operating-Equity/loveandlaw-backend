@@ -101,14 +101,14 @@ Front‑end integrations (ElevenLabs, HeyGen, avatar streaming) remain client‑
 | ----- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | 0     | **SafetyAgent**           | Detect distress\_score & suicide/self‑harm patterns; trigger human hand‑off                                                                    | Highest priority; executes each turn         |
 | 0     | **ProfileAgent**          | Fetch last N summaries + user preference sheet from UserProfiles; inject context into state                                                    | Parallel with SafetyAgent                    |
-| 1     | **ListenerAgent**         | GPT‑4o produces reflective draft; begins token stream after ≈ 30 tokens                                                                        | Tone informed by profile                     |
+| 1     | **ListenerAgent**         | Llama 4 produces reflective draft; begins token stream after ≈ 30 tokens                                                                        | Tone informed by profile                     |
 | 1     | **EmotionGauge**          | Groq Llama‑4 infers sentiment & engagement\_level (1‑10)                                                                                       | Lightweight prompt                           |
 | 1     | **SignalExtract**         | Groq Llama‑4 extracts structured facts (zip, dates, relations, etc.) & embeds them                                                             | Replaces regex/spaCy                         |
 | 1     | **AllianceMeter**       | Groq Llama‑4 model scoring bond / goal / task from latest exchange; writes to state                                                            | Mean latency ≤ 30 ms p95                     |
 | 1     | ResearchAgent             | On‑demand external legal search when needed                                                                                                    | Timeout‑tolerant                             |
 | 1     | MatcherAgent              | Elasticsearch (BM25 + dense vector) → up to 5 lawyer cards with match\_score; can trigger Exa or Perplexity research APIs based on user prompt | Skipped if distress > 6                      |
 | 1.5   | **ReflectionAgent**       | Checks if reflection is appropriate; generates prompts for journey/emotional/decision reflection; provides progress insights                    | Triggers on milestones, emotional shifts     |
-| 2     | **AdvisorAgent**          | GPT‑4o composes final reply using: Listener draft + legal guidance + lawyer cards + progress nudges + reflection prompts                       | Uses Adaptive Empathy prompt described below |
+| 2     | **AdvisorAgent**          | Llama 4 composes final reply using: Listener draft + legal guidance + lawyer cards + progress nudges + reflection prompts                       | Uses Adaptive Empathy prompt described below |
 | 2     | ProgressTracker           | Updates progress\_markers; schedules event‑based check‑ins via automations                                                                     |                                              |
 | 2     | **SuggestionAgent**       | Generates 3–5 context‑aware “Suggested questions” users can click; showcases available tools (e.g., “What forms do I need to file next?”)      | Sends `suggestions` frame to client          |
 
@@ -244,7 +244,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 - **PII Redaction**: Presidio + LLM-based redaction service
 - **Therapeutic Agents**:
   - SafetyAgent: Crisis detection with keyword/pattern matching + LLM
-  - ListenerAgent: GPT-4.1 empathetic response generation
+  - ListenerAgent: Llama 4 empathetic response generation
   - EmotionGauge: Sentiment and engagement analysis
   - AllianceMeter: Bond/Goal/Task measurement
   - SignalExtractAgent: Structured data extraction
@@ -262,24 +262,45 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 - **Language**: Python 3.13+ for async support and ML ecosystem
 - **Framework**: FastAPI for REST, native websockets for real-time
 - **AI Models**: 
-  - OpenAI GPT-4.1 for listener/advisor (high quality responses)
-  - Groq meta-llama/llama-4-maverick-17b-128e-instruct for quick analysis (emotion, alliance, signals)
+  - Groq meta-llama/llama-4-maverick-17b-128e-instruct for all agents (listener, advisor, analysis, legal specialists)
+  - Unified model approach for consistency and performance
 - **State Management**: LangGraph for complex conversational flows
 - **Data Storage**: AWS-native (DynamoDB, OpenSearch) with local dev support
 
+### Newly Implemented Components ✅
+
+- **Legal Specialist Agents Framework**: Base class and infrastructure for specialized legal intake
+- **Legal Specialist Agents**:
+  - CaseGeneralAgent: Initial intake and routing to specialists
+  - FamilyLawAgent: General family law intake with Llama 4 integration
+  - DivorceAndSeparationAgent: Handles divorce/separation cases with child custody routing
+  - ChildCustodyAgent: Comprehensive custody information gathering
+  - ChildSupportAgent: Support role and financial information collection
+  - PropertyDivisionAgent: Asset and debt division specialist
+  - SpousalSupportAgent: Income and support factor assessment
+  - DomesticViolenceAgent: High-priority safety-first approach
+  - Placeholder agents ready for implementation: Adoption, ChildAbuse, Guardianship, JuvenileDelinquency, PaternityPractice, RestrainingOrders
+- **Therapeutic Engine Integration**: Legal specialists now integrated into the main workflow with conditional routing
+- **Schema Validation**: Field dependencies and auto-population rules
+
 ### Not Yet Implemented
+
 - **ProgressTracker**: Milestone tracking and event-based check-ins
 - **SuggestionAgent**: Currently integrated into AdvisorAgent, not a separate agent
 - **Human mediator loop**: For complex custody disputes
 - **Voice integration**: Client-side responsibility
 - **Authentication flow**: JWT framework exists but not fully implemented
 - **Production AWS deployment**: Running in local/development mode
+- **Full Implementation of Placeholder Legal Agents**: Need prompt templates and specific logic
 
 ### Next Steps
+
 See TODO.md for detailed implementation roadmap. Key priorities:
+
 1. Populate Elasticsearch with lawyer data (script ready at `scripts/populate_lawyers.py`)
 2. AWS deployment configuration
 3. Complete authentication flow implementation
 4. Add monitoring and metrics
 5. Implement remaining agent (ProgressTracker)
-6. Extract SuggestionAgent from AdvisorAgent if needed as separate component
+6. Complete implementation of placeholder legal specialist agents
+7. Extract SuggestionAgent from AdvisorAgent if needed as separate component

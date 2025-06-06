@@ -115,8 +115,7 @@ src/
 
 Key environment variables:
 
-- `OPENAI_API_KEY` - OpenAI API for GPT-4o
-- `GROQ_API_KEY` - Groq API for Llama models
+- `GROQ_API_KEY` - Groq API for Llama 4 models
 - `AWS_REGION` - AWS region for services
 - `ELASTICSEARCH_URL` - Elasticsearch endpoint
 - `JWT_SECRET_KEY` - Secret for JWT tokens

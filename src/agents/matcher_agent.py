@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional
 import asyncio
 from datetime import datetime
 import numpy as np
-from openai import AsyncOpenAI
+from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState, LawyerCard
 from src.services.database import elasticsearch_service, redis_service
@@ -18,7 +18,7 @@ class MatcherAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("matcher")
-        self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
         self.cache_ttl = 3600  # 1 hour for lawyer matches
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -104,14 +104,18 @@ Situation: {state.user_text[:200]}
 Important factors: {', '.join(state.facts.keys())}
 """
             
-            # Generate embedding using OpenAI
-            response = await self.openai_client.embeddings.create(
-                model="text-embedding-3-small",
-                input=search_text
-            )
+            # For now, skip embeddings as Groq doesn't support embeddings yet
+            # In production, you might use a different embedding service
+            # response = await self.openai_client.embeddings.create(
+            #     model="text-embedding-3-small",
+            #     input=search_text
+            # )
             
-            embedding = response.data[0].embedding
-            return embedding
+            # Return None to skip embedding-based search
+            return None
+            
+            # embedding = response.data[0].embedding
+            # return embedding
             
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
@@ -258,8 +262,8 @@ Practice areas: {', '.join(card.practice_areas)}
 
 Write a warm, specific explanation:"""
 
-                response = await self.openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                response = await self.groq_client.chat.completions.create(
+                    model=settings.alliance_model,  # Using alliance model as it's fast
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7,
                     max_tokens=50

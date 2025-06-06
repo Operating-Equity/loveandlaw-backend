@@ -16,6 +16,24 @@ from src.agents.matcher_agent import MatcherAgent
 from src.agents.advisor_agent import AdvisorAgent
 from src.agents.progress_tracker import ProgressTracker
 from src.agents.reflection_agent import ReflectionAgent
+
+# Import legal specialist agents
+from src.agents.legal_specialists import (
+    CaseGeneralAgent,
+    FamilyLawAgent,
+    DivorceAndSeparationAgent,
+    ChildCustodyAgent,
+    ChildSupportAgent,
+    PropertyDivisionAgent,
+    SpousalSupportAgent,
+    DomesticViolenceAgent,
+    AdoptionAgent,
+    ChildAbuseAgent,
+    GuardianshipAgent,
+    JuvenileDelinquencyAgent,
+    PaternityPracticeAgent,
+    RestrainingOrdersAgent
+)
 from src.services.database import dynamodb_service, elasticsearch_service
 from src.utils.logger import get_logger
 
@@ -40,6 +58,24 @@ class TherapeuticEngine:
             "reflection": ReflectionAgent()
         }
         
+        # Initialize legal specialist agents
+        self.legal_specialists = {
+            "case_general": CaseGeneralAgent(),
+            "family_law": FamilyLawAgent(),
+            "divorce_and_separation": DivorceAndSeparationAgent(),
+            "child_custody": ChildCustodyAgent(),
+            "child_support": ChildSupportAgent(),
+            "property_division": PropertyDivisionAgent(),
+            "spousal_support": SpousalSupportAgent(),
+            "domestic_violence": DomesticViolenceAgent(),
+            "adoption_process": AdoptionAgent(),
+            "child_abuse": ChildAbuseAgent(),
+            "guardianship_process": GuardianshipAgent(),
+            "juvenile_delinquency": JuvenileDelinquencyAgent(),
+            "paternity_practice": PaternityPracticeAgent(),
+            "restraining_order": RestrainingOrdersAgent()
+        }
+        
         # Initialize the graph
         self.graph = self._build_graph()
         self.memory = MemorySaver()
@@ -54,13 +90,32 @@ class TherapeuticEngine:
         # Add nodes
         workflow.add_node("safety_check", self._safety_check)
         workflow.add_node("fetch_context", self._fetch_context)
+        workflow.add_node("legal_intake", self._legal_intake)
         workflow.add_node("parallel_analysis", self._parallel_analysis)
         workflow.add_node("reflection_check", self._reflection_check)
         workflow.add_node("advisor_compose", self._advisor_compose)
         workflow.add_node("persist_state", self._persist_state)
         
-        # Add edges
-        workflow.add_edge("safety_check", "fetch_context")
+        # Add conditional edges
+        workflow.add_conditional_edges(
+            "safety_check",
+            self._route_after_safety,
+            {
+                "legal_intake": "legal_intake",
+                "fetch_context": "fetch_context"
+            }
+        )
+        
+        workflow.add_conditional_edges(
+            "legal_intake",
+            self._route_after_legal_intake,
+            {
+                "legal_specialist": "legal_intake",  # Continue with specialist
+                "fetch_context": "fetch_context"      # Move to main flow
+            }
+        )
+        
+        # Add regular edges
         workflow.add_edge("fetch_context", "parallel_analysis")
         workflow.add_edge("parallel_analysis", "reflection_check")
         workflow.add_edge("reflection_check", "advisor_compose")
@@ -272,7 +327,11 @@ class TherapeuticEngine:
             "needs_reflection": state.get("needs_reflection", False),
             "reflection_type": state.get("reflection_type"),
             "reflection_prompts": state.get("reflection_prompts", []),
-            "reflection_insights": state.get("reflection_insights", [])
+            "reflection_insights": state.get("reflection_insights", []),
+            "legal_intake_result": state.get("legal_intake_result", {}),
+            "legal_question": state.get("legal_question", ""),
+            "case_info": state.get("case_info", {}),
+            "active_legal_specialist": state.get("active_legal_specialist")
         }
         
         # Get final response
@@ -329,6 +388,92 @@ class TherapeuticEngine:
         # Use ProfileAgent's update method
         profile_agent = self.agents["profile"]
         await profile_agent.update_profile_emotional_state(user_id, turn_state)
+    
+    def _route_after_safety(self, state: Dict[str, Any]) -> str:
+        """Determine routing after safety check"""
+        # If safety hold needed, skip to main flow
+        if state.get("skip_remaining_agents"):
+            return "fetch_context"
+            
+        # Check if we need legal intake
+        if self._needs_legal_intake(state):
+            return "legal_intake"
+            
+        return "fetch_context"
+    
+    def _needs_legal_intake(self, state: Dict[str, Any]) -> bool:
+        """Check if legal intake is needed"""
+        # Check if we're in a legal specialist flow
+        if state.get("active_legal_specialist"):
+            return True
+            
+        # Check if this is the first message and contains legal keywords
+        user_text = state["turn_state"]["user_text"].lower()
+        legal_keywords = ["divorce", "custody", "lawyer", "attorney", "legal", 
+                         "court", "sue", "rights", "visitation", "support", 
+                         "property", "abuse", "adoption", "guardianship"]
+        
+        if any(keyword in user_text for keyword in legal_keywords):
+            return True
+            
+        return False
+    
+    async def _legal_intake(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle legal intake and specialist routing"""
+        
+        # Determine which specialist to use
+        active_specialist = state.get("active_legal_specialist")
+        
+        if not active_specialist:
+            # Start with case general agent
+            active_specialist = "case_general"
+            state["active_legal_specialist"] = active_specialist
+            
+        # Get the appropriate specialist
+        specialist = self.legal_specialists.get(active_specialist)
+        if not specialist:
+            logger.error(f"Unknown legal specialist: {active_specialist}")
+            return state
+            
+        # Process with the specialist
+        specialist_state = {
+            "case_info": state.get("case_info", {}),
+            "user_text": state["turn_state"]["user_text"],
+            "chat_history": state.get("chat_history", []),
+            "schema": state.get("legal_schema", {})
+        }
+        
+        result = await specialist.process(specialist_state)
+        
+        # Update state with results
+        if result.get("extracted_info"):
+            state["case_info"] = result["extracted_info"]
+            state["legal_schema"] = result["extracted_info"]
+            
+        if result.get("question"):
+            state["legal_question"] = result["question"]
+            
+        # Check for state transitions
+        new_state = result.get("current_state", "")
+        if new_state in self.legal_specialists and new_state != active_specialist:
+            # Transitioning to a new specialist
+            state["active_legal_specialist"] = new_state
+        elif new_state == "completed" or new_state == "complete":
+            # Legal intake complete
+            state["legal_intake_complete"] = True
+            state["active_legal_specialist"] = None
+            
+        # Store for advisor
+        state["legal_intake_result"] = result
+        
+        return state
+    
+    def _route_after_legal_intake(self, state: Dict[str, Any]) -> str:
+        """Determine routing after legal intake"""
+        if state.get("legal_intake_complete"):
+            return "fetch_context"
+        else:
+            return "legal_specialist"  # Continue with specialist
 
 
 # Global instance

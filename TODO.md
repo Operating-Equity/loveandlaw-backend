@@ -9,7 +9,7 @@ docker run -d -p 6379:6379 redis:alpine
 
 # 2. Set up environment
 cp .env.example .env
-# Edit .env with your OpenAI and Groq API keys
+# Edit .env with your Groq API keys
 
 # 3. Install dependencies
 pip install -r requirements.txt
@@ -75,6 +75,24 @@ python test_connection.py
 - [x] Enhanced Therapeutic Engine with all agents integrated
 - [x] Suggestion generation integrated into AdvisorAgent
 - [x] Scripts for populating lawyer data (scripts/populate_lawyers.py)
+- [x] Legal specialist agents implemented:
+  - [x] Base framework for legal specialist agents with schema validation
+  - [x] CaseGeneralAgent - Initial intake and routing to specialists
+  - [x] FamilyLawAgent - General family law intake with GPT-4 integration
+  - [x] DivorceAndSeparationAgent - Handles divorce/separation with child routing
+  - [x] ChildCustodyAgent - Comprehensive custody information gathering
+  - [x] ChildSupportAgent - Support role and financial information collection
+  - [x] PropertyDivisionAgent - Asset and debt division specialist
+  - [x] SpousalSupportAgent - Income and support factor assessment
+  - [x] DomesticViolenceAgent - High-priority safety-first approach
+  - [x] Therapeutic Engine integration with conditional routing for legal specialists
+- [x] Legal specialist agent placeholders created:
+  - [x] AdoptionAgent - Placeholder for adoption case handling
+  - [x] ChildAbuseAgent - Placeholder for child abuse case handling
+  - [x] GuardianshipAgent - Placeholder for guardianship case handling
+  - [x] JuvenileDelinquencyAgent - Placeholder for juvenile delinquency case handling
+  - [x] PaternityPracticeAgent - Placeholder for paternity case handling
+  - [x] RestrainingOrdersAgent - Placeholder for restraining orders case handling
 
 ## High Priority 🔴 (After Getting System Running)
 
@@ -93,13 +111,21 @@ python test_connection.py
 - [ ] Set up CloudFront distribution
 - [ ] Implement S3 for file storage and logs
 
-### 3. Remaining Agents
+### 3. Legal Specialist Agents Implementation
 
-- [x] ProfileAgent - Fetch and manage user profiles ✅
-- [x] ResearchAgent - External legal research when needed ✅
-- [x] MatcherAgent - Advanced lawyer matching with Elasticsearch ✅
-- [x] ProgressTracker - Track and update user milestones ✅
-- [x] SuggestionAgent - Generate contextual suggestions ✅ (implemented within AdvisorAgent)
+- [ ] AdoptionAgent - Implement adoption case schema and logic
+- [ ] ChildAbuseAgent - Implement child abuse case schema and logic  
+- [ ] GuardianshipAgent - Implement guardianship case schema and logic
+- [ ] JuvenileDelinquencyAgent - Implement juvenile delinquency case schema and logic
+- [ ] PaternityPracticeAgent - Implement paternity case schema and logic
+- [ ] RestrainingOrdersAgent - Implement restraining orders case schema and logic
+
+Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
+  - Schema field definitions
+  - Priority order for field collection
+  - GPT-4 processing logic
+  - Field-specific questions
+  - Corresponding prompt templates in `prompts/` directory
 
 ### 4. Security & Authentication
 
@@ -128,6 +154,7 @@ python test_connection.py
 
 ### 7. Testing
 
+- [ ] Create tests directory structure
 - [ ] Add unit tests for all agents
 - [ ] Add integration tests for API endpoints
 - [ ] Add WebSocket connection tests
@@ -152,6 +179,7 @@ python test_connection.py
 
 ### 10. Documentation
 
+- [ ] Create documentation directory
 - [ ] API documentation with OpenAPI/Swagger
 - [ ] WebSocket protocol documentation
 - [ ] Deployment guide
