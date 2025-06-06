@@ -1,6 +1,7 @@
 """
 Progress Tracker Agent for Love & Law Backend
 Tracks user milestones and schedules event-based check-ins
+# TODO: This agent needs to be integrated with the Therapeutic Engine workflow
 """
 
 import logging
@@ -12,8 +13,9 @@ from dataclasses import dataclass
 from .base import BaseAgent
 from ..models.conversation import TurnState
 from ..models.user import UserProfile
+from ..utils.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class MilestoneCategory(Enum):
@@ -182,13 +184,64 @@ DIVORCE_MILESTONES = [
     ),
 ]
 
-# Similar milestone sets for other practice areas
+# Custody milestones
 CUSTODY_MILESTONES = [
-    # Add custody-specific milestones
+    Milestone(
+        id="custody_info_gathered",
+        name="Custody Information Gathered",
+        category=MilestoneCategory.INFORMATION_GATHERING,
+        description="Basic custody arrangement preferences collected",
+        triggers=["custody type", "parenting schedule", "shared custody"],
+        follow_up_days=3
+    ),
+    Milestone(
+        id="parenting_plan_drafted",
+        name="Parenting Plan Drafted",
+        category=MilestoneCategory.DOCUMENTATION,
+        description="Created detailed parenting plan",
+        triggers=["parenting plan", "custody schedule", "visitation plan"],
+        prerequisites=["custody_info_gathered"],
+        follow_up_days=7
+    ),
+    Milestone(
+        id="custody_petition_filed",
+        name="Custody Petition Filed",
+        category=MilestoneCategory.FILING,
+        description="Filed custody petition with court",
+        triggers=["filed custody", "custody petition", "custody papers"],
+        prerequisites=["parenting_plan_drafted"],
+        follow_up_days=30
+    ),
 ]
 
+# Child support milestones
 CHILD_SUPPORT_MILESTONES = [
-    # Add child support-specific milestones
+    Milestone(
+        id="financial_disclosure_complete",
+        name="Financial Disclosure Complete",
+        category=MilestoneCategory.DOCUMENTATION,
+        description="Completed financial disclosure forms",
+        triggers=["income disclosed", "financial forms", "pay stubs submitted"],
+        follow_up_days=7
+    ),
+    Milestone(
+        id="support_calculation_done",
+        name="Support Calculation Completed",
+        category=MilestoneCategory.DOCUMENTATION,
+        description="Child support amount calculated",
+        triggers=["support calculated", "payment amount", "support formula"],
+        prerequisites=["financial_disclosure_complete"],
+        follow_up_days=3
+    ),
+    Milestone(
+        id="support_order_filed",
+        name="Support Order Filed",
+        category=MilestoneCategory.FILING,
+        description="Child support order filed with court",
+        triggers=["support order", "filed for support", "support petition"],
+        prerequisites=["support_calculation_done"],
+        follow_up_days=30
+    ),
 ]
 
 
@@ -203,20 +256,29 @@ class ProgressTracker(BaseAgent):
             "child_support": CHILD_SUPPORT_MILESTONES,
         }
     
-    async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
+    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Process turn to detect and update milestones"""
         try:
-            # Get user profile from context
-            user_profile: UserProfile = context.get("user_profile")
+            # Extract necessary information from state
+            user_id = state.get("user_id")
+            legal_intent = state.get("legal_intent", [])
+            case_info = state.get("case_info", {})
+            progress_markers = state.get("progress_markers", [])
+            user_text = state.get("user_text", "")
+            
+            # Get user profile from state or create minimal one
+            user_profile = state.get("user_profile", {})
             if not user_profile:
-                logger.warning("No user profile in context")
-                return {}
+                user_profile = {
+                    "milestones_completed": [],
+                    "user_id": user_id
+                }
             
             # Determine relevant milestone set based on legal intent
-            relevant_milestones = self._get_relevant_milestones(state.legal_intent)
+            relevant_milestones = self._get_relevant_milestones(legal_intent)
             
             # Detect newly completed milestones
-            new_milestones = await self._detect_milestones(
+            new_milestones = self._detect_milestones(
                 state, 
                 user_profile,
                 relevant_milestones
@@ -225,7 +287,7 @@ class ProgressTracker(BaseAgent):
             # Update progress markers and user profile
             updates = {}
             if new_milestones:
-                updates = await self._update_progress(
+                updates = self._update_progress(
                     state,
                     user_profile,
                     new_milestones
@@ -279,22 +341,27 @@ class ProgressTracker(BaseAgent):
         
         return milestones
     
-    async def _detect_milestones(
+    def _detect_milestones(
         self, 
-        state: TurnState, 
-        user_profile: UserProfile,
+        state: Dict[str, Any], 
+        user_profile: Dict[str, Any],
         relevant_milestones: List[Milestone]
     ) -> List[Milestone]:
         """Detect which milestones have been newly completed"""
         new_milestones = []
         
         # Get already completed milestones
-        completed_ids = set(user_profile.milestones_completed or [])
+        completed_ids = set(user_profile.get("milestones_completed", []))
         
         # Combine user text and facts for trigger detection
-        context_text = state.user_text.lower()
-        facts_text = " ".join(str(v) for v in state.facts.values()).lower()
-        full_context = f"{context_text} {facts_text}"
+        user_text = state.get("user_text", "").lower()
+        facts = state.get("facts", {})
+        facts_text = " ".join(str(v) for v in facts.values()).lower()
+        
+        # Also check case_info for relevant information
+        case_info_text = str(state.get("case_info", {})).lower()
+        
+        full_context = f"{user_text} {facts_text} {case_info_text}"
         
         for milestone in relevant_milestones:
             # Skip if already completed
@@ -314,10 +381,10 @@ class ProgressTracker(BaseAgent):
         
         return new_milestones
     
-    async def _update_progress(
+    def _update_progress(
         self,
-        state: TurnState,
-        user_profile: UserProfile,
+        state: Dict[str, Any],
+        user_profile: Dict[str, Any],
         new_milestones: List[Milestone]
     ) -> Dict[str, Any]:
         """Update progress markers and user profile"""
@@ -325,11 +392,13 @@ class ProgressTracker(BaseAgent):
         
         # Update progress markers in state
         new_markers = [m.id for m in new_milestones]
-        state.progress_markers = list(set(state.progress_markers + new_markers))
+        current_markers = state.get("progress_markers", [])
+        state["progress_markers"] = list(set(current_markers + new_markers))
         
         # Update milestones in user profile
-        user_profile.milestones_completed = list(
-            set(user_profile.milestones_completed + new_markers)
+        current_milestones = user_profile.get("milestones_completed", [])
+        user_profile["milestones_completed"] = list(
+            set(current_milestones + new_markers)
         )
         
         # Generate celebration messages for new milestones
@@ -367,14 +436,14 @@ class ProgressTracker(BaseAgent):
     
     def _calculate_progress(
         self,
-        user_profile: UserProfile,
+        user_profile: Dict[str, Any],
         relevant_milestones: List[Milestone]
     ) -> Dict[str, Any]:
         """Calculate overall progress through legal journey"""
         if not relevant_milestones:
             return {"percentage": 0, "completed": 0, "total": 0}
         
-        completed = len(user_profile.milestones_completed or [])
+        completed = len(user_profile.get("milestones_completed", []))
         total = len(relevant_milestones)
         percentage = int((completed / total) * 100) if total > 0 else 0
         
@@ -384,7 +453,7 @@ class ProgressTracker(BaseAgent):
             category_milestones = [m for m in relevant_milestones if m.category == category]
             category_completed = sum(
                 1 for m in category_milestones 
-                if m.id in (user_profile.milestones_completed or [])
+                if m.id in user_profile.get("milestones_completed", [])
             )
             if category_milestones:
                 category_progress[category.value] = {
@@ -403,11 +472,11 @@ class ProgressTracker(BaseAgent):
     
     def _determine_current_phase(
         self,
-        user_profile: UserProfile,
+        user_profile: Dict[str, Any],
         relevant_milestones: List[Milestone]
     ) -> str:
         """Determine which phase user is currently in"""
-        completed_ids = set(user_profile.milestones_completed or [])
+        completed_ids = set(user_profile.get("milestones_completed", []))
         
         # Check phases in order
         for category in [
@@ -428,13 +497,13 @@ class ProgressTracker(BaseAgent):
     
     def _generate_insights(
         self,
-        user_profile: UserProfile,
+        user_profile: Dict[str, Any],
         relevant_milestones: List[Milestone],
         progress_info: Dict[str, Any]
     ) -> List[str]:
         """Generate insights about user's progress"""
         insights = []
-        completed_ids = set(user_profile.milestones_completed or [])
+        completed_ids = set(user_profile.get("milestones_completed", []))
         
         # Insight: Next steps
         next_milestones = self._get_next_available_milestones(

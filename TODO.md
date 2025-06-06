@@ -86,13 +86,13 @@ python test_connection.py
   - [x] SpousalSupportAgent - Income and support factor assessment
   - [x] DomesticViolenceAgent - High-priority safety-first approach
   - [x] Therapeutic Engine integration with conditional routing for legal specialists
-- [x] Legal specialist agent placeholders created:
-  - [x] AdoptionAgent - Placeholder for adoption case handling
-  - [x] ChildAbuseAgent - Placeholder for child abuse case handling
-  - [x] GuardianshipAgent - Placeholder for guardianship case handling
-  - [x] JuvenileDelinquencyAgent - Placeholder for juvenile delinquency case handling
-  - [x] PaternityPracticeAgent - Placeholder for paternity case handling
-  - [x] RestrainingOrdersAgent - Placeholder for restraining orders case handling
+- [x] Legal specialist agents fully implemented:
+  - [x] AdoptionAgent - Complete with ICWA compliance and urgency detection
+  - [x] ChildAbuseAgent - Safety-first with mandatory reporting reminders
+  - [x] GuardianshipAgent - Handles minor and adult guardianship cases
+  - [x] JuvenileDelinquencyAgent - Youth justice with rehabilitation focus
+  - [x] PaternityPracticeAgent - Time-sensitive parentage establishment
+  - [x] RestrainingOrdersAgent - Immediate safety assessment and resources
 
 ## High Priority 🔴 (After Getting System Running)
 
@@ -111,23 +111,7 @@ python test_connection.py
 - [ ] Set up CloudFront distribution
 - [ ] Implement S3 for file storage and logs
 
-### 3. Legal Specialist Agents Implementation
-
-- [ ] AdoptionAgent - Implement adoption case schema and logic
-- [ ] ChildAbuseAgent - Implement child abuse case schema and logic  
-- [ ] GuardianshipAgent - Implement guardianship case schema and logic
-- [ ] JuvenileDelinquencyAgent - Implement juvenile delinquency case schema and logic
-- [ ] PaternityPracticeAgent - Implement paternity case schema and logic
-- [ ] RestrainingOrdersAgent - Implement restraining orders case schema and logic
-
-Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
-  - Schema field definitions
-  - Priority order for field collection
-  - GPT-4 processing logic
-  - Field-specific questions
-  - Corresponding prompt templates in `prompts/` directory
-
-### 4. Security & Authentication
+### 3. Security & Authentication
 
 - [ ] Implement proper JWT authentication flow
 - [ ] Add user registration/login endpoints
@@ -137,7 +121,7 @@ Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
 
 ## Medium Priority 🟡
 
-### 5. Monitoring & Metrics
+### 4. Monitoring & Metrics
 
 - [ ] Set up Prometheus metrics collection
 - [ ] Implement CloudWatch integration
@@ -145,14 +129,14 @@ Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
 - [ ] Create health check endpoints
 - [ ] Implement conversation analytics
 
-### 6. Data Persistence
+### 5. Data Persistence
 
 - [ ] Implement conversation summarization
 - [ ] Add cron jobs for profile updates
 - [ ] Implement data TTL policies
 - [ ] Add backup strategies
 
-### 7. Testing
+### 6. Testing
 
 - [ ] Create tests directory structure
 - [ ] Add unit tests for all agents
@@ -161,7 +145,7 @@ Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
 - [ ] Add PII redaction tests
 - [ ] Set up test fixtures and mocks
 
-### 8. Deployment
+### 7. Deployment
 
 - [ ] Create Dockerfile
 - [ ] Add docker-compose for local development
@@ -171,13 +155,13 @@ Note: Placeholder files created at `src/agents/legal_specialists/`. Each needs:
 
 ## Low Priority 🟢
 
-### 9. Enhanced Features
+### 8. Enhanced Features
 
 - [ ] Implement conversation export
 - [ ] Create admin dashboard API endpoints
 - [ ] Add lawyer availability tracking
 
-### 10. Documentation
+### 9. Documentation
 
 - [ ] Create documentation directory
 - [ ] API documentation with OpenAPI/Swagger

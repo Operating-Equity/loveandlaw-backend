@@ -279,19 +279,25 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
   - PropertyDivisionAgent: Asset and debt division specialist
   - SpousalSupportAgent: Income and support factor assessment
   - DomesticViolenceAgent: High-priority safety-first approach
-  - Placeholder agents ready for implementation: Adoption, ChildAbuse, Guardianship, JuvenileDelinquency, PaternityPractice, RestrainingOrders
+  - AdoptionAgent: Comprehensive adoption process specialist with ICWA compliance
+  - ChildAbuseAgent: Safety-first approach with mandatory reporting reminders
+  - GuardianshipAgent: Handles both minor and adult guardianship proceedings
+  - JuvenileDelinquencyAgent: Youth justice specialist with rehabilitation focus
+  - PaternityPracticeAgent: Establishes/disestablishes parentage with time sensitivity
+  - RestrainingOrdersAgent: Protective order specialist with immediate safety assessment
 - **Therapeutic Engine Integration**: Legal specialists now integrated into the main workflow with conditional routing
 - **Schema Validation**: Field dependencies and auto-population rules
 
+- **ProgressTracker**: Updated with proper milestones for divorce, custody, and child support cases
+- **All Legal Specialist Agents**: Fully implemented with Llama 4 integration and prompt templates
+
 ### Not Yet Implemented
 
-- **ProgressTracker**: Milestone tracking and event-based check-ins
 - **SuggestionAgent**: Currently integrated into AdvisorAgent, not a separate agent
 - **Human mediator loop**: For complex custody disputes
 - **Voice integration**: Client-side responsibility
 - **Authentication flow**: JWT framework exists but not fully implemented
 - **Production AWS deployment**: Running in local/development mode
-- **Full Implementation of Placeholder Legal Agents**: Need prompt templates and specific logic
 
 ### Next Steps
 
@@ -301,6 +307,4 @@ See TODO.md for detailed implementation roadmap. Key priorities:
 2. AWS deployment configuration
 3. Complete authentication flow implementation
 4. Add monitoring and metrics
-5. Implement remaining agent (ProgressTracker)
-6. Complete implementation of placeholder legal specialist agents
-7. Extract SuggestionAgent from AdvisorAgent if needed as separate component
+5. Extract SuggestionAgent from AdvisorAgent if needed as separate component
