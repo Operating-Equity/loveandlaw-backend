@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.cover
+.coverage
+.coverage.*
+coverage.xml
+*.log
+
+# Data files (too large for Docker image)
+.data/
+*.csv
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Environment
+.env
+.env.*
+
+# Tests
+tests/
+test_*.py
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# AWS
+.aws/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/

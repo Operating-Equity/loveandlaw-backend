@@ -335,3 +335,11 @@ See TODO.md for detailed implementation roadmap. Key priorities:
   - Start with: `./start-elasticsearch.sh` (requires Docker)
   - Load data with: `source venv/bin/activate && python scripts/load_lawyer_data.py`
 - **Testing**: Run `python test_data_loading.py` to verify setup
+
+### AWS Deployment
+
+- **Deployment Guide**: See `AWS_DEPLOYMENT_GUIDE.md` for complete AWS setup
+- **Infrastructure as Code**: Terraform files in `terraform/` directory
+- **Docker**: `Dockerfile` and `docker-compose.yml` for containerization
+- **CI/CD**: GitHub Actions workflow in `.github/workflows/deploy.yml`
+- **Scripts**: Deployment scripts in `scripts/aws/`
