@@ -10,7 +10,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # Security scheme
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
@@ -51,9 +51,26 @@ def verify_token(token: str) -> Dict[str, Any]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """Get current authenticated user from JWT token"""
+    # Development mode bypass
+    if settings.environment == "development" and settings.debug:
+        if not credentials:
+            logger.warning("Auth bypassed in development mode")
+            return {
+                "user_id": "dev_user_123",
+                "role": "admin",
+                "scopes": ["read", "write", "admin"]
+            }
+    
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     token = credentials.credentials
     
     try:

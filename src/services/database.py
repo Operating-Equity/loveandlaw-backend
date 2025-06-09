@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+import os
 import aioboto3
 from elasticsearch import AsyncElasticsearch
 import redis.asyncio as redis
@@ -343,13 +344,56 @@ redis_service = RedisService()
 
 async def initialize_databases():
     """Initialize all database connections"""
-    await dynamodb_service.initialize()
-    await elasticsearch_service.initialize()
-    await redis_service.initialize()
+    global dynamodb_service, elasticsearch_service, redis_service
+    
+    # Check for skip flags
+    skip_aws = os.environ.get("SKIP_AWS_INIT", "false").lower() == "true"
+    skip_redis = os.environ.get("SKIP_REDIS_INIT", "false").lower() == "true"
+    
+    # Initialize DynamoDB only if not skipped
+    if not skip_aws:
+        try:
+            await dynamodb_service.initialize()
+            logger.info("DynamoDB initialized successfully")
+        except Exception as e:
+            logger.warning(f"DynamoDB initialization failed: {e}. Running without DynamoDB.")
+    else:
+        logger.info("Skipping DynamoDB initialization (SKIP_AWS_INIT=true)")
+    
+    # Initialize Elasticsearch
+    try:
+        await elasticsearch_service.initialize()
+        logger.info("Elasticsearch initialized successfully")
+    except Exception as e:
+        logger.warning(f"Elasticsearch initialization failed: {e}. Running without Elasticsearch.")
+    
+    # Initialize Redis only if not skipped
+    if not skip_redis:
+        try:
+            await redis_service.initialize()
+            logger.info("Redis initialized successfully")
+        except Exception as e:
+            logger.warning(f"Redis initialization failed: {e}. Running without Redis.")
+    else:
+        logger.info("Skipping Redis initialization (SKIP_REDIS_INIT=true)")
 
 
 async def close_databases():
     """Close all database connections"""
-    await dynamodb_service.close()
-    await elasticsearch_service.close()
-    await redis_service.close()
+    if dynamodb_service:
+        try:
+            await dynamodb_service.close()
+        except Exception as e:
+            logger.warning(f"Error closing DynamoDB: {e}")
+    
+    if elasticsearch_service:
+        try:
+            await elasticsearch_service.close()
+        except Exception as e:
+            logger.warning(f"Error closing Elasticsearch: {e}")
+    
+    if redis_service:
+        try:
+            await redis_service.close()
+        except Exception as e:
+            logger.warning(f"Error closing Redis: {e}")

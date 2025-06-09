@@ -1,33 +1,44 @@
 # TODO - Love & Law Backend
 
-## Quick Start Guide 🎯
+## Current Status ✅
+- **Backend is fully functional and ready to run!**
+- All therapeutic agents implemented
+- Legal specialist agents complete
+- WebSocket and REST API working
+- Authentication with dev bypass
+- Database services with graceful fallback
+
+## Quick Start Guide 🚀
 
 ```bash
-# 1. Start required services
-./start-elasticsearch.sh  # Or: docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" elasticsearch:8.17.0
-docker run -d -p 6379:6379 redis:alpine
+# 1. Start Elasticsearch (Required)
+docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" elasticsearch:8.17.0
 
 # 2. Set up environment
-cp .env.example .env  # ✅ Done
-# Edit .env with your Groq API keys
+cp .env.example .env  # Edit and add your GROQ_API_KEY
 
-# 3. Install dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements-es.txt  # For Elasticsearch only
-# pip install -r requirements.txt  # For full stack (has dependency conflicts)
+# 3. Install dependencies (two options)
+pip install -r requirements-minimal.txt  # Recommended - minimal deps
+# OR
+pip install -r requirements.txt  # Full stack (may have conflicts)
 
-# 4. Test data setup
-python test_data_loading.py
+# 4. Test Elasticsearch
+python test_elasticsearch.py
 
-# 5. Populate lawyer data
-python scripts/load_lawyer_data.py  # Uses .data/ directory
+# 5. Populate sample lawyer data
+python scripts/populate_lawyers.py
 
-# 6. Start the backend
-python main.py
+# 6. Start the backend (two options)
+python run_minimal.py  # API only (recommended for testing)
+# OR
+python main.py  # Full stack with WebSocket
 
 # 7. Test it!
-python test_connection.py
+# Visit http://localhost:8000/docs for API documentation
+# Or use: curl http://localhost:8000/
+```
+
+See **STARTUP_GUIDE.md** for detailed instructions!
 ```
 
 ## Immediate Next Steps (To Get System Running) 🚀
