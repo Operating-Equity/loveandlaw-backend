@@ -2,10 +2,10 @@
 
 from typing import Dict, Any, Optional, List
 import re
-from ...utils.logger import setup_logger
+from ...utils.logger import get_logger
 from ..base import BaseAgent
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class CaseGeneralAgent(BaseAgent):
@@ -36,7 +36,7 @@ class CaseGeneralAgent(BaseAgent):
     
     def __init__(self):
         """Initialize the case general agent."""
-        super().__init__()
+        super().__init__(name="CaseGeneralAgent")
         self.state = "gathering"
         self.prompt_template = self._load_prompt()
         

@@ -3,10 +3,10 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List, Tuple
 from pydantic import BaseModel
-from ...utils.logger import setup_logger
+from ...utils.logger import get_logger
 from ..base import BaseAgent
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class LegalSchemaField(BaseModel):
@@ -22,9 +22,9 @@ class LegalSchemaField(BaseModel):
 class LegalSpecialistAgent(BaseAgent, ABC):
     """Base class for all legal specialist agents."""
     
-    def __init__(self):
+    def __init__(self, name: str = "LegalSpecialistAgent"):
         """Initialize the legal specialist agent."""
-        super().__init__()
+        super().__init__(name=name)
         self.schema_fields = self._define_schema_fields()
         self.priority_order = self._define_priority_order()
         self.state = "initial_analysis"

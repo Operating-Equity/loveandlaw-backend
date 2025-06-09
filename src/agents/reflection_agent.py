@@ -18,8 +18,8 @@ class ReflectionAgent(BaseAgent):
     """
     
     def __init__(self):
-        super().__init__()
-        self.groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        super().__init__(name="ReflectionAgent")
+        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
     
     async def process(self, turn_state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
         """

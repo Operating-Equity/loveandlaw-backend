@@ -1,6 +1,9 @@
 import asyncio
 import uvicorn
 import websockets
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
+
 from src.config.settings import settings
 from src.core.websocket_handler import chat_edge_service
 from src.api.main import app

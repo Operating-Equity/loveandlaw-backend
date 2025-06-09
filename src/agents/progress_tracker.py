@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from .base import BaseAgent
 from ..models.conversation import TurnState
 from ..models.user import UserProfile
-from ..utils.logger import setup_logger
+from ..utils.logger import get_logger
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class MilestoneCategory(Enum):
@@ -249,7 +249,7 @@ class ProgressTracker(BaseAgent):
     """Tracks user progress through legal milestones and schedules check-ins"""
     
     def __init__(self):
-        super().__init__()
+        super().__init__(name="ProgressTracker")
         self.milestone_catalog = {
             "divorce": DIVORCE_MILESTONES,
             "custody": CUSTODY_MILESTONES,

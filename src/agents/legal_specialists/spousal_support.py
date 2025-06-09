@@ -2,13 +2,13 @@
 
 from typing import Dict, Any, Optional, List
 from .base import LegalSpecialistAgent, LegalSchemaField
-from ...utils.logger import setup_logger
+from ...utils.logger import get_logger
 from groq import Groq
 import os
 import re
 import json
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class SpousalSupportAgent(LegalSpecialistAgent):
@@ -16,7 +16,7 @@ class SpousalSupportAgent(LegalSpecialistAgent):
     
     def __init__(self):
         """Initialize the spousal support agent."""
-        super().__init__()
+        super().__init__(name="SpousalSupportAgent")
         self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         self.prompt_template = self._load_prompt_template()
         

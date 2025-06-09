@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import asyncio
 from groq import AsyncGroq
 from src.agents.base import BaseAgent
