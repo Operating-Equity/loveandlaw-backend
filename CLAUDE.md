@@ -303,8 +303,19 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 
 See TODO.md for detailed implementation roadmap. Key priorities:
 
-1. Populate Elasticsearch with lawyer data (script ready at `scripts/populate_lawyers.py`)
+1. ✅ Elasticsearch data loading infrastructure ready
+   - Run `./start-elasticsearch.sh` to start Elasticsearch in Docker
+   - Run `python scripts/load_lawyer_data.py` to load data
+   - Test with `python test_data_loading.py`
 2. AWS deployment configuration
 3. Complete authentication flow implementation
 4. Add monitoring and metrics
 5. Extract SuggestionAgent from AdvisorAgent if needed as separate component
+
+### Data Setup
+
+- **Data Directory**: `.data/` contains all CSV files (merged lawyers, reviews, scorecards, etc.)
+- **Elasticsearch Setup**: 
+  - Start with: `./start-elasticsearch.sh` (requires Docker)
+  - Load data with: `source venv/bin/activate && python scripts/load_lawyer_data.py`
+- **Testing**: Run `python test_data_loading.py` to verify setup

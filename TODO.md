@@ -4,36 +4,44 @@
 
 ```bash
 # 1. Start required services
-docker run -d -p 9200:9200 -e "discovery.type=single-node" elasticsearch:8.12.0
+./start-elasticsearch.sh  # Or: docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" elasticsearch:8.17.0
 docker run -d -p 6379:6379 redis:alpine
 
 # 2. Set up environment
-cp .env.example .env
+cp .env.example .env  # ✅ Done
 # Edit .env with your Groq API keys
 
 # 3. Install dependencies
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements-es.txt  # For Elasticsearch only
+# pip install -r requirements.txt  # For full stack (has dependency conflicts)
 
-# 4. Populate lawyer data
-python scripts/populate_lawyers.py
+# 4. Test data setup
+python test_data_loading.py
 
-# 5. Start the backend
+# 5. Populate lawyer data
+python scripts/load_lawyer_data.py  # Uses .data/ directory
+
+# 6. Start the backend
 python main.py
 
-# 6. Test it!
+# 7. Test it!
 python test_connection.py
 ```
 
 ## Immediate Next Steps (To Get System Running) 🚀
 
 ### Prerequisites
-- [ ] Install and start Elasticsearch locally (Docker: `docker run -d -p 9200:9200 -e "discovery.type=single-node" elasticsearch:8.12.0`)
+- [x] ✅ Install and start Elasticsearch locally (Script ready: `./start-elasticsearch.sh`)
 - [ ] Install and start Redis locally (Docker: `docker run -d -p 6379:6379 redis:alpine`)
-- [ ] Set up .env file with API keys (copy from .env.example)
-- [ ] Install Python dependencies: `pip install -r requirements.txt`
+- [x] ✅ Set up .env file with API keys (copy from .env.example)
+- [x] ✅ Install Python dependencies: `pip install -r requirements-es.txt` (minimal for ES)
 
 ### Data Setup
-- [ ] Run Elasticsearch to create index: `python scripts/populate_lawyers.py`
+- [x] ✅ Data files ready in `.data/` directory (42GB lawyer.csv + supporting files)
+- [x] ✅ Updated load script to use `.data/` directory
+- [ ] Run Elasticsearch and load data: `python scripts/load_lawyer_data.py`
 - [ ] Verify lawyers are indexed (check Elasticsearch logs)
 - [ ] Optional: Add more lawyer data via CSV upload endpoint
 
