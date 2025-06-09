@@ -25,7 +25,7 @@ logger = setup_logger(__name__)
 class LawyerDataLoader:
     """Loads and transforms lawyer data from CSV files into Elasticsearch."""
 
-    def __init__(self, data_dir: str = "./data"):
+    def __init__(self, data_dir: str = "./.data"):
         self.data_dir = Path(data_dir)
         self.merged_lawyers = {}
         self.normalized_mapping = {}
