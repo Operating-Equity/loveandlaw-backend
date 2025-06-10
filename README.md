@@ -81,8 +81,27 @@ prompts/            # AI agent prompts
 - **Backend**: Python, FastAPI, WebSockets
 - **AI**: Groq Llama 4, LangGraph
 - **Infrastructure**: AWS (ECS, Lambda, API Gateway)
-- **Data**: Elasticsearch, DynamoDB
+- **Data**: Elasticsearch (required), DynamoDB (AWS), Redis (optional)
 - **Monitoring**: CloudWatch
+
+## AWS Services Setup
+
+### DynamoDB Tables
+
+The application uses two DynamoDB tables:
+- `loveandlaw-conversations`: Stores conversation turn states
+- `loveandlaw-userprofiles`: Stores user profiles and preferences
+
+To create the tables in AWS:
+```bash
+python scripts/create_dynamodb_tables.py --region us-east-1
+```
+
+Or use Terraform:
+```bash
+cd terraform
+terraform apply -target=module.database
+```
 
 ## License
 

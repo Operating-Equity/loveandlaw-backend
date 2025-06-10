@@ -22,7 +22,7 @@ class SignalExtractAgent(BaseAgent):
         self.legal_intents = [
             "divorce", "custody", "child_support", "alimony", "property_division",
             "restraining_order", "adoption", "paternity", "visitation", "mediation",
-            "prenuptial", "separation", "domestic_violence", "guardianship"
+            "prenuptial", "separation", "domestic_violence", "guardianship", "general_legal_help"
         ]
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -54,7 +54,7 @@ Look for:
 2. Facts:
    - Location (zip, city, state)
    - Dates (filing dates, court dates, separation date)
-   - Financial info (income range, assets, budget for lawyer)
+   - Financial info (income range, assets, budget for lawyer - can be specific amounts like "$5000" or ranges like "$-$$")
    - Family structure (children, ages)
    - Employment status
    - Housing situation
@@ -77,6 +77,7 @@ Return a JSON object with this structure:
     "children_ages": [5, 8],
     "separation_date": "2024-01-15",
     "budget_range": "$-$$",
+    "budget_amount": 5000,
     "employment": "full-time",
     ...
   }},
@@ -150,7 +151,7 @@ Return ONLY valid JSON:"""
                         pass
             
             # Copy other valid facts
-            for key in ["children_count", "budget_range", "employment", "housing"]:
+            for key in ["children_count", "budget_range", "budget_amount", "employment", "housing"]:
                 if key in facts:
                     validated["facts"][key] = facts[key]
         
@@ -184,9 +185,33 @@ Return ONLY valid JSON:"""
             if intent in text_lower:
                 result["legal_intents"].append(intent)
         
+        # If no specific intent but user is looking for a lawyer, add general family law
+        if not result["legal_intents"] and ("lawyer" in text_lower or "attorney" in text_lower):
+            result["legal_intents"].append("general_legal_help")
+        
         # Extract budget indicators
         if "$" in text:
-            if "$$$$" in text:
+            # First check for specific dollar amounts
+            dollar_amounts = re.findall(r'\$?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*(?:dollars?|usd|USD)?', text)
+            if dollar_amounts:
+                # Convert the first found amount to integer
+                amount_str = dollar_amounts[0].replace(',', '')
+                try:
+                    amount = int(amount_str)
+                    result["facts"]["budget_amount"] = amount
+                    # Also set budget range based on amount
+                    if amount < 2000:
+                        result["facts"]["budget_range"] = "$"
+                    elif amount < 5000:
+                        result["facts"]["budget_range"] = "$$"
+                    elif amount < 10000:
+                        result["facts"]["budget_range"] = "$$$"
+                    else:
+                        result["facts"]["budget_range"] = "$$$$"
+                except ValueError:
+                    pass
+            # Otherwise check for range indicators
+            elif "$$$$" in text:
                 result["facts"]["budget_range"] = "$$$$"
             elif "$$$" in text:
                 result["facts"]["budget_range"] = "$$$"

@@ -484,10 +484,9 @@ class TherapeuticEngine:
     
     def _route_after_legal_intake(self, state: Dict[str, Any]) -> str:
         """Determine routing after legal intake"""
-        if state.get("legal_intake_complete"):
-            return "fetch_context"
-        else:
-            return "legal_specialist"  # Continue with specialist
+        # Always proceed to fetch_context after legal intake
+        # The specialist has already provided their response
+        return "fetch_context"
 
 
 # Global instance

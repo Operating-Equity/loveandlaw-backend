@@ -49,3 +49,13 @@ output "private_subnet_ids" {
   description = "Private subnet IDs"
   value       = join(",", module.networking.private_subnets)
 }
+
+output "dynamodb_conversations_table" {
+  description = "DynamoDB conversations table name"
+  value       = module.database.conversations_table_name
+}
+
+output "dynamodb_profiles_table" {
+  description = "DynamoDB user profiles table name"
+  value       = module.database.profiles_table_name
+}

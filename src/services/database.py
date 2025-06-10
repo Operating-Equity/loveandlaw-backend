@@ -65,6 +65,7 @@ class DynamoDBService:
     async def _create_tables_if_not_exist(self):
         """Create DynamoDB tables for local development"""
         if not settings.dynamodb_endpoint:
+            # In AWS, tables should be created via Terraform
             return
             
         existing_tables = await self.dynamodb.meta.client.list_tables()
@@ -102,6 +103,10 @@ class DynamoDBService:
     
     async def save_turn_state(self, turn_state: Dict[str, Any]):
         """Save conversation turn state"""
+        if not self.conversation_table:
+            logger.warning("DynamoDB not initialized, skipping turn state save")
+            return
+            
         try:
             # Serialize datetime objects and floats
             turn_state = serialize_for_dynamodb(turn_state)
@@ -118,6 +123,10 @@ class DynamoDBService:
     
     async def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user profile"""
+        if not self.user_profile_table:
+            logger.warning("DynamoDB not initialized, returning empty profile")
+            return None
+            
         try:
             response = await self.user_profile_table.get_item(
                 Key={'user_id': user_id}
@@ -129,6 +138,10 @@ class DynamoDBService:
     
     async def update_user_profile(self, user_id: str, updates: Dict[str, Any]):
         """Update user profile"""
+        if not self.user_profile_table:
+            logger.warning("DynamoDB not initialized, skipping profile update")
+            return
+            
         try:
             # Serialize datetime objects and floats
             updates = serialize_for_dynamodb(updates)

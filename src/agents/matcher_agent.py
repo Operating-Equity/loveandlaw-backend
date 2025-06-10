@@ -166,7 +166,17 @@ class MatcherAgent(BaseAgent):
             filters["practice_areas"] = state.legal_intent
         
         # Budget and fee structure
-        if state.facts.get("budget_range"):
+        if state.facts.get("budget_amount"):
+            # Handle specific budget amounts
+            budget = state.facts["budget_amount"]
+            if budget < 2000:
+                filters["free_consultation"] = True
+                filters["payment_plans"] = True
+            elif budget < 5000:
+                filters["max_hourly_rate"] = 250
+            elif budget < 10000:
+                filters["max_hourly_rate"] = 350
+        elif state.facts.get("budget_range"):
             if state.facts["budget_range"] == "low" or state.facts["budget_range"] == "$":
                 filters["free_consultation"] = True
             elif state.facts["budget_range"] == "high" or state.facts["budget_range"] == "$$$":

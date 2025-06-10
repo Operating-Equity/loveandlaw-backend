@@ -279,7 +279,7 @@ class ProgressTracker(BaseAgent):
             
             # Detect newly completed milestones
             new_milestones = self._detect_milestones(
-                state, 
+                turn_state, 
                 user_profile,
                 relevant_milestones
             )
@@ -288,7 +288,7 @@ class ProgressTracker(BaseAgent):
             updates = {}
             if new_milestones:
                 updates = self._update_progress(
-                    state,
+                    turn_state,
                     user_profile,
                     new_milestones
                 )
@@ -343,7 +343,7 @@ class ProgressTracker(BaseAgent):
     
     def _detect_milestones(
         self, 
-        state: Dict[str, Any], 
+        turn_state: TurnState, 
         user_profile: Dict[str, Any],
         relevant_milestones: List[Milestone]
     ) -> List[Milestone]:
@@ -354,12 +354,13 @@ class ProgressTracker(BaseAgent):
         completed_ids = set(user_profile.get("milestones_completed", []))
         
         # Combine user text and facts for trigger detection
-        user_text = state.get("user_text", "").lower()
-        facts = state.get("facts", {})
+        user_text = turn_state.user_text.lower()
+        facts = turn_state.facts
         facts_text = " ".join(str(v) for v in facts.values()).lower()
         
         # Also check case_info for relevant information
-        case_info_text = str(state.get("case_info", {})).lower()
+        case_info = getattr(turn_state, 'case_info', {})
+        case_info_text = str(case_info).lower()
         
         full_context = f"{user_text} {facts_text} {case_info_text}"
         
@@ -383,17 +384,17 @@ class ProgressTracker(BaseAgent):
     
     def _update_progress(
         self,
-        state: Dict[str, Any],
+        turn_state: TurnState,
         user_profile: Dict[str, Any],
         new_milestones: List[Milestone]
     ) -> Dict[str, Any]:
         """Update progress markers and user profile"""
         updates = {}
         
-        # Update progress markers in state
+        # Update progress markers in turn_state
         new_markers = [m.id for m in new_milestones]
-        current_markers = state.get("progress_markers", [])
-        state["progress_markers"] = list(set(current_markers + new_markers))
+        current_markers = turn_state.progress_markers
+        turn_state.progress_markers = list(set(current_markers + new_markers))
         
         # Update milestones in user profile
         current_milestones = user_profile.get("milestones_completed", [])

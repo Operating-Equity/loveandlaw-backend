@@ -41,8 +41,12 @@
 ### Integration
 - [ ] Connect Lambda WebSocket to actual ALB endpoints (currently using mock)
 - [x] ~~Integrate real Elasticsearch lawyer data~~ ✅ Completed with semantic search
-- [ ] Implement DynamoDB user profile persistence (graceful fallback exists)
-- [ ] Add Redis caching for performance (graceful fallback exists)
+- [x] ~~Implement DynamoDB user profile persistence~~ ✅ AWS DynamoDB configured with graceful fallback
+  - Tables: `loveandlaw-conversations`, `loveandlaw-userprofiles`
+  - Create tables: `python scripts/create_dynamodb_tables.py`
+  - Terraform configuration added in `terraform/modules/database/dynamodb.tf`
+- [x] ~~Configure Redis with authentication~~ ✅ Redis URL updated with proper authentication
+- [x] ~~Fix WebSocket recursion error~~ ✅ Fixed therapeutic engine routing to prevent infinite loops
 
 ### Features
 - [ ] Implement file upload for documents

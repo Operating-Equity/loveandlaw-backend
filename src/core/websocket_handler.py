@@ -164,6 +164,14 @@ class ChatEdgeService:
     
     async def _handle_user_message(self, connection: WebSocketConnection, message: Dict[str, Any]):
         """Handle user chat message"""
+        # In development mode, auto-authenticate if not authenticated
+        if settings.environment == "development" and not connection.authenticated:
+            # Auto-authenticate with a default user_id
+            connection.user_id = message.get("user_id", "dev-user-" + connection.connection_id[:8])
+            connection.authenticated = True
+            connection.conversation_id = str(uuid4())
+            logger.info(f"Development mode: Auto-authenticated user {connection.user_id}")
+        
         if not connection.authenticated:
             await connection.send_message({
                 "type": "error",
@@ -206,11 +214,12 @@ class ChatEdgeService:
             await self._stream_response(connection, cid, result)
             
         except Exception as e:
-            logger.error(f"Error processing user message: {e}")
+            logger.error(f"Error processing user message: {e}", exc_info=True)
+            error_msg = str(e) if settings.debug else "Error processing your message. Please try again."
             await connection.send_message({
                 "type": "error",
                 "cid": cid,
-                "message": "Error processing your message. Please try again."
+                "message": error_msg
             })
     
     async def _stream_response(self, connection: WebSocketConnection, cid: str, result: Dict[str, Any]):
