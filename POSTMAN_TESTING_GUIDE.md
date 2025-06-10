@@ -125,12 +125,25 @@ Connect to WebSocket and send messages - lawyers will be matched automatically w
 
 Replace `{user_id}` with actual user ID (e.g., `test-user-123`)
 
-### 5. WebSocket Testing Details
+### 5. WebSocket Testing in Postman
 
-#### Using Postman (v8.5+)
-1. Create new WebSocket request
-2. Enter URL: `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production`
-3. Connect and send messages
+#### Prerequisites
+- **Postman v8.5 or higher** (required for WebSocket support)
+
+#### How to Test WebSocket
+1. **Create WebSocket Request**
+   - Click "New" → "WebSocket Request" (not regular HTTP request)
+   - Or use the imported collection's "WebSocket Connection" request
+
+2. **Connect**
+   - URL: `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production`
+   - Click "Connect"
+   - You'll see: `{"type": "connection_established", "message": "Connected to Love & Law chat"}`
+
+3. **Send Messages**
+   - Type JSON messages in the message composer
+   - Click "Send" or press Enter
+   - Messages appear in the Messages tab
 
 #### Sample WebSocket Flow:
 
