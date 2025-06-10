@@ -11,7 +11,7 @@ The LoveAndLaw API provides therapeutic conversational support for individuals n
 
 ## Authentication
 
-Currently in development mode - authentication is not enforced. In production, all endpoints will require JWT tokens.
+JWT authentication framework is implemented but currently disabled for development/testing. To enable authentication in production, set `AUTH_ENABLED=true` in environment variables.
 
 ## REST API Endpoints
 

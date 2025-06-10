@@ -253,7 +253,7 @@ The LoveAndLaw backend has been completely implemented with all core features wo
 - **PII Redaction**: Presidio + LLM-based redaction service
 - **WebSocket Handler**: Full duplex communication with streaming, reflection data, and suggestions
 - **REST API**: Complete endpoints for lawyer matching, CSV upload, and profile management
-- **Authentication**: JWT framework with development bypass for easy testing
+- **Authentication**: JWT framework ready (currently in development mode for testing)
 
 #### All Therapeutic Agents (Complete) ✅
 - **SafetyAgent**: Crisis detection with keyword/pattern matching + LLM
@@ -291,12 +291,12 @@ The LoveAndLaw backend has been completely implemented with all core features wo
 - **Error Handling**: Graceful degradation when services unavailable
 - **Development Tools**: Minimal startup scripts and test utilities
 
-### Architecture Decisions
+### Architecture Decisions  
 - **Language**: Python 3.8+ for async support and ML ecosystem
-- **Framework**: FastAPI for REST, native websockets for real-time
-- **AI Models**: Groq Llama 4 (meta-llama/llama-4-maverick-17b-128e-instruct) unified across all agents
-- **State Management**: LangGraph for complex conversational flows
-- **Data Storage**: AWS-native design with local development support
+- **Framework**: FastAPI for REST API and WebSocket handling
+- **AI Model**: Groq Llama 4 (meta-llama/llama-4-maverick-17b-128e-instruct) for all agents
+- **State Management**: LangGraph for conversation orchestration
+- **Data Storage**: Elasticsearch (required), DynamoDB/Redis (optional with fallback)
 
 ### Ready for Production Features
 - Graceful service degradation
@@ -353,8 +353,7 @@ See TODO.md for detailed implementation roadmap. Key priorities:
 
 ### AWS Deployment
 
-- **Deployment Guide**: See `AWS_DEPLOYMENT_GUIDE.md` for complete AWS setup
-- **Infrastructure as Code**: Terraform files in `terraform/` directory
-- **Docker**: `Dockerfile` and `docker-compose.yml` for containerization
-- **CI/CD**: GitHub Actions workflow in `.github/workflows/deploy.yml`
-- **Scripts**: Deployment scripts in `scripts/aws/`
+- **Deployment Guide**: See `DEPLOYMENT_GUIDE.md` for complete AWS setup
+- **Architecture**: See `ARCHITECTURE.md` for system design details
+- **Infrastructure**: Terraform configuration in `terraform/` directory
+- **Automation**: `deploy.sh` for one-command deployment with testing

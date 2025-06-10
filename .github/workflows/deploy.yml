@@ -114,7 +114,7 @@ jobs:
           -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
           --push \
-          -f Dockerfile.optimized .
+          .
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   deploy-staging:

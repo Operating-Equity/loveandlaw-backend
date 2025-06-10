@@ -42,10 +42,11 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-3. Start Elasticsearch (optional):
+3. Start Elasticsearch (for local development):
 ```bash
 ./start-elasticsearch.sh
 ```
+Note: Production uses Elastic Cloud. Configure `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY` in `.env`
 
 4. Run locally:
 ```bash

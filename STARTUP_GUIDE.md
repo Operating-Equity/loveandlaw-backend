@@ -135,9 +135,9 @@ ws.send(JSON.stringify({
 ## Troubleshooting
 
 ### Elasticsearch Connection Failed
-- Make sure Elasticsearch is running on port 9200
-- Check if another service is using port 9200
-- Try: `curl http://localhost:9200` to test
+- For local development: Run `./start-elasticsearch.sh` to start Elasticsearch in Docker
+- For production: Use Elastic Cloud configuration in `.env`
+- Test connection: `python test_elasticsearch_connection.py`
 
 ### Missing Groq API Key
 - Sign up at https://console.groq.com to get an API key

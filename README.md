@@ -43,6 +43,7 @@ python test_production_api.py
 
 ## Documentation
 
+- [Architecture Guide](ARCHITECTURE.md) - Complete system architecture and design
 - [Deployment Guide](DEPLOYMENT_GUIDE.md) - AWS deployment instructions
 - [API Documentation](API_DOCUMENTATION.md) - API reference and examples
 - [Startup Guide](STARTUP_GUIDE.md) - Detailed setup instructions
