@@ -1,0 +1,19 @@
+project_name = "loveandlaw"
+environment  = "production"
+aws_region   = "us-east-1"
+
+# Elasticsearch endpoint (your existing Elastic Cloud)
+elasticsearch_endpoint = "https://your-elasticsearch-endpoint.aws.elastic-cloud.com:443"
+
+# Container configuration
+container_cpu    = 1024
+container_memory = 2048
+
+# Alert email
+alert_email = "admin@loveandlaw.com"
+
+# API Keys (set these in environment variables or AWS Secrets Manager)
+groq_api_key          = "your-groq-api-key-here"
+anthropic_api_key     = "your-anthropic-api-key-here"
+jwt_secret_key        = "your-jwt-secret-key-here"
+elasticsearch_api_key = "your-elasticsearch-api-key-here"
