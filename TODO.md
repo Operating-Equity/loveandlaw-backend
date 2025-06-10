@@ -31,15 +31,9 @@
 
 ### Features
 - [ ] Implement file upload for documents
-- [ ] Add voice transcription support
 - [ ] Create admin dashboard
 - [ ] Add analytics tracking
 
-### Optimization
-- [ ] Optimize Docker image size
-- [ ] Implement connection pooling
-- [ ] Add response caching
-- [ ] Performance profiling
 
 ### Documentation
 - [ ] Create client SDK examples
