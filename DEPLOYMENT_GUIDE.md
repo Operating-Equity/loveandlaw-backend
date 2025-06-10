@@ -4,6 +4,8 @@
 
 The LoveAndLaw backend provides therapeutic conversational AI support for family law issues, with lawyer matching and contextual guidance.
 
+**Status**: ✅ Production deployment is fully operational with WebSocket support.
+
 ## Live Endpoints
 
 - **REST API**: `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production`
@@ -13,11 +15,10 @@ The LoveAndLaw backend provides therapeutic conversational AI support for family
 ## Architecture
 
 ```
-Client → API Gateway → Lambda (WebSocket Handler)
-                    ↓
-                   ECS (REST API) ← ALB
-                    ↓
-            Elasticsearch / DynamoDB
+REST API:  Client → API Gateway → ALB → ECS → Backend Services
+WebSocket: Client → API Gateway → Lambda → ECS (via HTTP) → Backend Services
+                                    ↓
+                             DynamoDB (connections)
 ```
 
 ## Local Development

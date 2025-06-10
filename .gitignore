@@ -85,3 +85,29 @@ dmypy.json
 terraform.tfvars
 *.tfvars
 !terraform.tfvars.example
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Test files
+test_*.py
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Task definitions (generated)
+task-definition-*.json
+
+# Lambda deployment packages
+lambda_*.zip
+lambda_*.py
+websocket_lambda.zip
+index.py
+deploy_lambda.sh
+
+# Temporary fix directories
+terraform/fixes/

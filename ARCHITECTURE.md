@@ -84,17 +84,30 @@ LoveAndLaw is an AI-powered therapeutic conversational support system for family
 
 ### Component Interactions
 
-1. **Client Connection Flow**:
+1. **REST API Flow**:
    ```
-   Client → CloudFront → API Gateway → Lambda/ALB → ECS → Backend Services
+   Client → CloudFront → API Gateway → ALB → ECS → Backend Services
    ```
 
-2. **Message Processing Flow**:
+2. **WebSocket Flow** (Lambda Proxy Architecture):
+   ```
+   Client → API Gateway WebSocket → Lambda Handler → DynamoDB (connection state)
+                                         ↓
+                                   HTTP to ALB/ECS
+                                         ↓
+                                   Therapeutic Engine
+                                         ↓
+                                   Lambda Callback
+                                         ↓
+                                   API Gateway → Client
+   ```
+
+3. **Message Processing Flow**:
    ```
    User Message → PII Redaction → Therapeutic Engine → Agent Orchestration → Response Generation → Streaming Response
    ```
 
-3. **Data Flow**:
+4. **Data Flow**:
    ```
    User Input → Signal Extraction → Profile Update → Context Building → AI Processing → Response
    ```
@@ -108,13 +121,15 @@ LoveAndLaw is an AI-powered therapeutic conversational support system for family
   - Cluster: `loveandlaw-production-cluster`
   - Service: `loveandlaw-api`
   - Task Definition: Auto-scaling enabled
-  - Platform: X86_64 Linux
+  - Platform: ARM64 Linux (cost-optimized)
+  - Current Revision: 24
 
-- **Lambda**: WebSocket connection handling
-  - Function: `loveandlaw-websocket-handler`
+- **Lambda**: WebSocket proxy handler
+  - Function: `loveandlaw-production-websocket-handler`
   - Runtime: Python 3.11
-  - Memory: 512MB
+  - Memory: 256MB
   - Timeout: 30 seconds
+  - VPC: Connected to ECS VPC for internal communication
 
 #### Networking
 - **VPC**: Custom VPC with public/private subnets
@@ -133,7 +148,10 @@ LoveAndLaw is an AI-powered therapeutic conversational support system for family
 
 #### Storage & Database
 - **DynamoDB**: User profiles and conversation state
-  - Tables: `UserProfiles`, `ConversationState`
+  - Tables: 
+    - `loveandlaw-production-profiles`
+    - `loveandlaw-production-conversations`
+    - `loveandlaw-websocket-connections`
   - Global Secondary Indexes for queries
   - TTL enabled for data retention
 

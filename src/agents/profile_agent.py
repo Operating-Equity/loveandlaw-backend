@@ -125,8 +125,10 @@ class ProfileAgent(BaseAgent):
         
         # Days since first interaction
         if profile.get("created_at"):
-            created = datetime.fromisoformat(profile["created_at"])
-            metrics["days_since_first_interaction"] = (datetime.utcnow() - created).days
+            created_at = profile["created_at"]
+            if isinstance(created_at, str):
+                created = datetime.fromisoformat(created_at)
+                metrics["days_since_first_interaction"] = (datetime.utcnow() - created).days
         
         # Emotional trends
         timeline = profile.get("emotional_timeline", [])

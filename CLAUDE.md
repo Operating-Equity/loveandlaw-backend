@@ -241,6 +241,14 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 
 The LoveAndLaw backend has been completely implemented with all core features working. You can start using it immediately by following the STARTUP_GUIDE.md.
 
+### Recent Fixes (January 2025)
+- **WebSocket Deployment Fix**: Resolved Terraform duplicate resource conflicts
+  - Created consolidated WebSocket fix in `terraform/fixes/fix-websocket-consolidated.tf`
+  - Implements Lambda-based WebSocket proxy for API Gateway integration
+  - Includes ALB target group with sticky sessions for WebSocket support
+  - All conflicting fix files renamed to `.backup` to prevent conflicts
+  - Run `./scripts/aws/fix-websocket.sh` to apply the fix
+
 ### Completed Components ✅
 
 #### Core Infrastructure
@@ -316,6 +324,13 @@ The LoveAndLaw backend has been completely implemented with all core features wo
   - MatcherAgent intelligently chooses between standard and semantic search based on query complexity
   - Test script `test_semantic_search.py` to verify semantic search functionality
 
+- **WebSocket Lambda Integration Fix**:
+  - Lambda handler updated to use correct internal API endpoints (`/internal/websocket/message`)
+  - Function renamed from `handler` to `lambda_handler` for AWS compatibility
+  - Added support for multiple response messages with proper ordering
+  - Created deployment script `deploy_lambda.sh` for easy updates
+  - Test scripts: `test_lambda_websocket.py` (local), `test_production_websocket.py` (production)
+
 ### Not Yet Implemented (Future Enhancements)
 - **Human mediator loop**: For complex custody disputes
 - **Voice integration**: Client-side responsibility
@@ -323,6 +338,29 @@ The LoveAndLaw backend has been completely implemented with all core features wo
 - **Production AWS deployment**: Currently optimized for local/development
 - **Monitoring dashboards**: Metrics collection ready, needs visualization
 - **RLHF integration**: For continuous improvement
+
+### Known Issues & Solutions
+
+#### WebSocket 502 Error in Production
+The current deployment shows WebSocket connections failing with HTTP 502 error. This is because API Gateway WebSocket APIs cannot use HTTP_PROXY integration type with an Application Load Balancer (ALB).
+
+**Three solution options available:**
+
+1. **Lambda Proxy Solution** (Recommended for scalability)
+   - Uses Lambda function to proxy WebSocket connections to ECS
+   - Includes connection management via DynamoDB
+   - Apply with: `./scripts/aws/fix-websocket.sh`
+   - Files: `lambda_websocket_handler.py`, `src/api/websocket_internal.py`
+
+2. **Network Load Balancer Solution** (Best for direct connections)
+   - Creates NLB specifically for WebSocket traffic
+   - Direct TCP connection to ECS containers
+   - Apply with: `terraform apply -target=terraform/fixes/fix-websocket-integration.tf`
+
+3. **ALB Sticky Sessions Solution** (Quick fix)
+   - Adds sticky sessions to ALB for WebSocket persistence
+   - Creates dedicated target group for `/ws` path
+   - Apply with: `terraform apply -target=terraform/fixes/fix-alb-websocket.tf`
 
 ### Next Steps
 

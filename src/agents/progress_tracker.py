@@ -256,18 +256,18 @@ class ProgressTracker(BaseAgent):
             "child_support": CHILD_SUPPORT_MILESTONES,
         }
     
-    def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    async def process(self, turn_state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
         """Process turn to detect and update milestones"""
         try:
-            # Extract necessary information from state
-            user_id = state.get("user_id")
-            legal_intent = state.get("legal_intent", [])
-            case_info = state.get("case_info", {})
-            progress_markers = state.get("progress_markers", [])
-            user_text = state.get("user_text", "")
+            # Extract necessary information from turn state
+            user_id = turn_state.user_id
+            legal_intent = turn_state.legal_intent
+            case_info = turn_state.facts
+            progress_markers = turn_state.progress_markers
+            user_text = turn_state.user_text
             
-            # Get user profile from state or create minimal one
-            user_profile = state.get("user_profile", {})
+            # Get user profile from context or create minimal one
+            user_profile = context.get("user_profile", {})
             if not user_profile:
                 user_profile = {
                     "milestones_completed": [],

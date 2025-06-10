@@ -4,6 +4,8 @@
 
 The LoveAndLaw API provides therapeutic conversational support for individuals navigating family law issues. It combines empathetic AI responses with practical legal guidance and lawyer matching services.
 
+**Status**: ✅ Both REST and WebSocket APIs are fully operational in production.
+
 ## Base URLs
 
 - **REST API**: `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production`

@@ -11,7 +11,22 @@
 
 ## Pending Tasks
 
-### Infrastructure
+### Infrastructure  
+- [x] Fix WebSocket 502 error - **COMPLETED** ✅:
+  - Lambda WebSocket handler deployed and working (no more 502 errors)
+  - ECS service updated to ARM64 architecture with SpaCy pre-installed
+  - Internal routes now return 200 OK
+  - WebSocket infrastructure fully operational
+  - **AI responses are now working!** All runtime errors fixed:
+    - Fixed missing json import in therapeutic engine
+    - Fixed DynamoDB table name configuration
+    - Fixed datetime serialization issues
+    - Fixed float/Decimal conversion for DynamoDB
+    - Fixed reserved keyword issues in DynamoDB
+    - Fixed ProgressTracker async method signature
+  - Current deployment: revision 24 with all fixes
+  - Test with: `python test_websocket_simple.py`
+  - Note: Legal intake has recursion issue with certain messages (low priority)
 - [ ] Complete SSL certificate validation (add DNS CNAME record)
 - [ ] Configure custom domain (api.loveandlaw.xyz) after SSL validation
 - [ ] Implement rate limiting on API Gateway

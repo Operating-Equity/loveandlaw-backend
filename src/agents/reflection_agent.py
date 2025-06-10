@@ -128,10 +128,13 @@ class ReflectionAgent(BaseAgent):
         
         # Check last reflection time
         last_reflection = user_profile.get("last_reflection_date")
-        if last_reflection:
-            last_date = datetime.fromisoformat(last_reflection)
-            if datetime.utcnow() - last_date > timedelta(days=7):
-                return True, "journey"
+        if last_reflection and isinstance(last_reflection, str):
+            try:
+                last_date = datetime.fromisoformat(last_reflection)
+                if datetime.utcnow() - last_date > timedelta(days=7):
+                    return True, "journey"
+            except ValueError:
+                pass
         
         return False, None
     

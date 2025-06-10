@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     
     # Database Configuration
     dynamodb_endpoint: Optional[str] = Field(None, env="DYNAMODB_ENDPOINT")
+    dynamodb_conversations_table: str = Field(default="ConversationState", env="DYNAMODB_CONVERSATIONS_TABLE")
+    dynamodb_profiles_table: str = Field(default="UserProfiles", env="DYNAMODB_PROFILES_TABLE")
     elasticsearch_url: str = Field(default="http://localhost:9200", env="ELASTICSEARCH_URL")
     elasticsearch_api_key: Optional[str] = Field(None, env="ELASTICSEARCH_API_KEY")
     redis_url: str = Field(default="redis://localhost:6379", env="REDIS_URL")

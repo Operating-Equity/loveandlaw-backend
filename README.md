@@ -2,10 +2,13 @@
 
 AI-powered therapeutic conversational support for family law issues.
 
-## Production Endpoints
+## 🚀 Production Status
+
+✅ **FULLY OPERATIONAL** - WebSocket and REST APIs are live and working!
 
 - **REST API**: `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production`
 - **WebSocket**: `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production`
+- **Current Deployment**: ECS revision 24 (ARM64 architecture)
 
 ## Quick Start
 
@@ -28,7 +31,11 @@ python main.py
 ### Testing
 
 ```bash
-python test_production_api.py
+# Test REST API health
+curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/health
+
+# Test WebSocket with Postman (see POSTMAN_TESTING_GUIDE.md)
+# Import: loveandlaw-postman-collection.json
 ```
 
 ### Deployment
@@ -47,6 +54,8 @@ python test_production_api.py
 - [Deployment Guide](DEPLOYMENT_GUIDE.md) - AWS deployment instructions
 - [API Documentation](API_DOCUMENTATION.md) - API reference and examples
 - [Startup Guide](STARTUP_GUIDE.md) - Detailed setup instructions
+- [Postman Testing Guide](POSTMAN_TESTING_GUIDE.md) - WebSocket testing instructions
+- [Claude Instructions](CLAUDE.md) - AI assistant instructions for development
 
 ## Project Structure
 

@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from decimal import Decimal
 import os
+import json
 import aioboto3
 from elasticsearch import AsyncElasticsearch
 import redis.asyncio as redis
@@ -8,6 +10,19 @@ from src.config.settings import settings
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def serialize_for_dynamodb(obj):
+    """Convert datetime objects to ISO format strings and floats to Decimals"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: serialize_for_dynamodb(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_for_dynamodb(item) for item in obj]
+    return obj
 
 
 class DynamoDBService:
@@ -39,8 +54,8 @@ class DynamoDBService:
             # Create tables if they don't exist (for local dev)
             await self._create_tables_if_not_exist()
             
-            self.conversation_table = await self.dynamodb.Table('ConversationState')
-            self.user_profile_table = await self.dynamodb.Table('UserProfiles')
+            self.conversation_table = await self.dynamodb.Table(settings.dynamodb_conversations_table)
+            self.user_profile_table = await self.dynamodb.Table(settings.dynamodb_profiles_table)
             
             logger.info("DynamoDB initialized successfully")
         except Exception as e:
@@ -56,9 +71,9 @@ class DynamoDBService:
         existing_table_names = existing_tables.get('TableNames', [])
         
         # ConversationState table
-        if 'ConversationState' not in existing_table_names:
+        if settings.dynamodb_conversations_table not in existing_table_names:
             await self.dynamodb.create_table(
-                TableName='ConversationState',
+                TableName=settings.dynamodb_conversations_table,
                 KeySchema=[
                     {'AttributeName': 'user_id', 'KeyType': 'HASH'},
                     {'AttributeName': 'turn_id', 'KeyType': 'RANGE'}
@@ -72,9 +87,9 @@ class DynamoDBService:
             logger.info("Created ConversationState table")
         
         # UserProfiles table
-        if 'UserProfiles' not in existing_table_names:
+        if settings.dynamodb_profiles_table not in existing_table_names:
             await self.dynamodb.create_table(
-                TableName='UserProfiles',
+                TableName=settings.dynamodb_profiles_table,
                 KeySchema=[
                     {'AttributeName': 'user_id', 'KeyType': 'HASH'}
                 ],
@@ -88,6 +103,9 @@ class DynamoDBService:
     async def save_turn_state(self, turn_state: Dict[str, Any]):
         """Save conversation turn state"""
         try:
+            # Serialize datetime objects and floats
+            turn_state = serialize_for_dynamodb(turn_state)
+            
             # Set TTL
             ttl = int((datetime.utcnow() + timedelta(days=settings.conversation_ttl_days)).timestamp())
             turn_state['ttl'] = ttl
@@ -112,22 +130,36 @@ class DynamoDBService:
     async def update_user_profile(self, user_id: str, updates: Dict[str, Any]):
         """Update user profile"""
         try:
+            # Serialize datetime objects and floats
+            updates = serialize_for_dynamodb(updates)
+            
             # Set TTL
             ttl = int((datetime.utcnow() + timedelta(days=settings.user_profile_ttl_days)).timestamp())
             updates['ttl'] = ttl
             updates['updated_at'] = datetime.utcnow().isoformat()
             
-            # Build update expression
+            # Build update expression with attribute names for reserved keywords
             update_expr = "SET "
             expr_values = {}
+            expr_names = {}
+            
             for key, value in updates.items():
-                update_expr += f"{key} = :{key}, "
+                # Skip primary key fields
+                if key == 'user_id':
+                    continue
+                    
+                # Use placeholder for attribute names to handle reserved keywords
+                attr_name = f"#{key}"
+                expr_names[attr_name] = key
+                update_expr += f"{attr_name} = :{key}, "
                 expr_values[f":{key}"] = value
+            
             update_expr = update_expr.rstrip(", ")
             
             await self.user_profile_table.update_item(
                 Key={'user_id': user_id},
                 UpdateExpression=update_expr,
+                ExpressionAttributeNames=expr_names,
                 ExpressionAttributeValues=expr_values
             )
             logger.info(f"Updated user profile: {user_id}")

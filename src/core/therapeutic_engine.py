@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 import asyncio
+import json
 from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -142,15 +143,21 @@ class TherapeuticEngine:
         )
         
         # Prepare graph input
+        # Convert turn_state to dict with proper JSON encoding
+        turn_state_dict = json.loads(turn_state.json())
+        
         graph_input = {
-            "turn_state": turn_state.dict(),
+            "turn_state": turn_state_dict,
             "user_id": user_id,
             "conversation_id": conversation_id,
             "context": {}
         }
         
-        # Configure for this conversation
-        config = {"configurable": {"thread_id": conversation_id or user_id}}
+        # Configure for this conversation with recursion limit
+        config = {
+            "configurable": {"thread_id": conversation_id or user_id},
+            "recursion_limit": 50
+        }
         
         try:
             # Run the graph
@@ -443,7 +450,7 @@ class TherapeuticEngine:
             "schema": state.get("legal_schema", {})
         }
         
-        result = await specialist.process(specialist_state)
+        result = specialist.process(specialist_state)
         
         # Update state with results
         if result.get("extracted_info"):
@@ -454,11 +461,18 @@ class TherapeuticEngine:
             state["legal_question"] = result["question"]
             
         # Check for state transitions
+        result_state = result.get("state", "")
         new_state = result.get("current_state", "")
-        if new_state in self.legal_specialists and new_state != active_specialist:
+        
+        # Check if case general agent has collected a case
+        if active_specialist == "case_general" and result_state == "case_collected":
+            # Legal intake complete for now - we have basic info
+            state["legal_intake_complete"] = True
+            state["active_legal_specialist"] = None
+        elif new_state in self.legal_specialists and new_state != active_specialist:
             # Transitioning to a new specialist
             state["active_legal_specialist"] = new_state
-        elif new_state == "completed" or new_state == "complete":
+        elif new_state == "completed" or new_state == "complete" or result_state == "complete":
             # Legal intake complete
             state["legal_intake_complete"] = True
             state["active_legal_specialist"] = None

@@ -14,6 +14,7 @@ from src.config.settings import settings
 from src.services.database import initialize_databases, close_databases, elasticsearch_service, dynamodb_service
 from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse
 from src.api.auth import get_current_user
+from src.api.websocket_internal import router as websocket_internal_router
 from src.utils.logger import get_logger
 from src.core.therapeutic_engine import therapeutic_engine
 from src.services.pii_redaction import pii_service
@@ -53,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include internal WebSocket router
+app.include_router(websocket_internal_router)
 
 
 @app.get("/")
