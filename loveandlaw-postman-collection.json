@@ -1,0 +1,238 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "LoveAndLaw Backend API",
+    "description": "Complete API collection for LoveAndLaw - A 24x7 family law assistant that empowers users during difficult moments.\n\n## Overview\nThis collection contains all endpoints for the LoveAndLaw backend including:\n- Health check endpoints\n- Lawyer matching API\n- User profile management\n- WebSocket chat interface\n- Admin operations\n\n## Authentication\nMost endpoints require JWT authentication. In development mode, authentication can be bypassed by setting `DEBUG_MODE=true`.\n\n## Base URLs\n- **Production REST API**: https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production\n- **Production WebSocket**: wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production\n- **Local Development**: http://localhost:8000\n\n## Important Notes\n- All user text is automatically redacted for PII protection\n- AI responses are streamed for better UX\n- The system includes 14 specialized legal agents\n- Therapeutic engine provides emotional support alongside legal guidance",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production",
+      "type": "string",
+      "description": "Production REST API base URL"
+    },
+    {
+      "key": "ws_url",
+      "value": "wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production",
+      "type": "string",
+      "description": "Production WebSocket URL"
+    },
+    {
+      "key": "local_url",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Local development URL"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT authentication token"
+    },
+    {
+      "key": "user_id",
+      "value": "test-user-123",
+      "type": "string",
+      "description": "Test user ID"
+    },
+    {
+      "key": "conversation_id",
+      "value": "conv-456",
+      "type": "string",
+      "description": "Test conversation ID"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Checks",
+      "description": "Endpoints for monitoring service health and connectivity",
+      "item": [
+        {
+          "name": "Root Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Basic health check endpoint that returns service status.\n\n**No authentication required**\n\n### Response Example:\n```json\n{\n  \"status\": \"healthy\",\n  \"service\": \"Love & Law Backend\",\n  \"version\": \"1.0.0\",\n  \"environment\": \"production\"\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "AWS Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Health check endpoint used by AWS ALB/ECS for service monitoring.\n\n**No authentication required**\n\n### Response Example:\n```json\n{\n  \"status\": \"healthy\",\n  \"service\": \"Love & Law Backend\",\n  \"version\": \"1.0.0\",\n  \"environment\": \"production\"\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Detailed API Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "Detailed health check that includes database connectivity status.\n\n**No authentication required**\n\n### Response Example:\n```json\n{\n  \"status\": \"healthy\",\n  \"service\": \"Love & Law Backend API\",\n  \"version\": \"1.0.0\",\n  \"environment\": \"production\",\n  \"checks\": {\n    \"elasticsearch\": {\n      \"status\": \"connected\",\n      \"latency_ms\": 15\n    },\n    \"dynamodb\": {\n      \"status\": \"connected\",\n      \"latency_ms\": 8\n    },\n    \"redis\": {\n      \"status\": \"degraded\",\n      \"error\": \"Connection timeout\"\n    }\n  }\n}\n```\n\n### Status Values:\n- `healthy`: All services operational\n- `degraded`: Some optional services unavailable but core functionality works"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Lawyer Matching (Optional)",
+      "description": "⚠️ NOTE: Lawyer matching happens AUTOMATICALLY during chat conversations. This endpoint is optional for standalone search functionality.",
+      "item": [
+        {
+          "name": "Match Lawyers (Standalone)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"facts\": {\n    \"zip\": \"94105\",\n    \"practice_areas\": [\"divorce\", \"child_custody\"],\n    \"budget_range\": \"$$\",\n    \"search_text\": \"experienced divorce lawyer with custody expertise\"\n  },\n  \"limit\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/match",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "match"]
+            },
+            "description": "## ⚠️ IMPORTANT: Lawyer Matching is Primarily Internal\n\n**This endpoint is OPTIONAL.** Lawyer matching happens automatically during chat conversations via WebSocket when:\n- User provides location (ZIP code)\n- Legal needs are identified\n- User mentions \"lawyer\", \"attorney\", \"legal help\"\n- User is not in crisis (distress < 7)\n\n### When to Use This Endpoint:\n- Building a standalone \"Find a Lawyer\" page\n- Quick search functionality outside of chat\n- Testing lawyer matching independently\n- Pre-fetching lawyers before starting chat\n\n### Primary Method (Via WebSocket):\nDuring chat, lawyers are automatically matched and sent as:\n```json\n{\n  \"type\": \"cards\",\n  \"cid\": \"msg-123\",\n  \"cards\": [/* lawyer recommendations */]\n}\n```\n\n### This REST Endpoint (Secondary/Optional):\n\n**Requires authentication** (unless in debug mode)\n\n### Request Body:\n- `facts` (required): Object containing matching criteria\n  - `zip` (string): User's ZIP code for location-based matching\n  - `practice_areas` (array): List of legal practice areas needed\n    - Valid values: `divorce`, `child_custody`, `child_support`, `property_division`, `spousal_support`, `domestic_violence`, `adoption`, `guardianship`, `paternity`, `juvenile`, `restraining_orders`\n  - `budget_range` (string): Budget tier\n    - `$`: Low budget\n    - `$$`: Medium budget\n    - `$$$`: High budget\n  - `search_text` (string): Free text for semantic search\n- `limit` (integer): Number of results (1-20, default: 5)\n\n### Response Example:\n```json\n{\n  \"cards\": [\n    {\n      \"id\": \"lawyer-123\",\n      \"name\": \"Sarah Johnson\",\n      \"firm\": \"Johnson Family Law\",\n      \"match_score\": 0.95,\n      \"blurb\": \"20+ years specializing in complex custody cases\",\n      \"link\": \"https://example.com/lawyer/123\",\n      \"practice_areas\": [\"divorce\", \"child_custody\"],\n      \"location\": {\n        \"city\": \"San Francisco\",\n        \"state\": \"CA\",\n        \"zip\": \"94105\"\n      },\n      \"rating\": 4.8,\n      \"reviews_count\": 127,\n      \"budget_range\": \"$$\"\n    }\n  ]\n}\n```\n\n### Matching Algorithm:\n1. Location-based filtering (ZIP code proximity)\n2. Practice area matching\n3. Budget compatibility\n4. Semantic search on lawyer profiles\n5. Scoring based on ratings and reviews"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "description": "Endpoints for managing user profiles",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "{{user_id}}"]
+            },
+            "description": "Retrieve a user's profile including legal situation, milestones, and preferences.\n\n**Requires authentication**\n- Users can only access their own profile\n- Admins can access any profile\n\n### Response Example:\n```json\n{\n  \"profile\": {\n    \"user_id\": \"test-user-123\",\n    \"created_at\": \"2024-01-10T08:00:00Z\",\n    \"updated_at\": \"2024-01-10T10:30:00Z\",\n    \"legal_situation\": {\n      \"practice_areas\": [\"divorce\", \"child_custody\"],\n      \"state\": \"CA\",\n      \"urgency\": \"medium\",\n      \"case_details\": \"Seeking divorce with joint custody\"\n    },\n    \"milestones_completed\": [\n      \"initial_consultation\",\n      \"paperwork_started\",\n      \"lawyer_contacted\"\n    ],\n    \"current_goals\": [\n      \"File divorce petition\",\n      \"Establish custody agreement\"\n    ],\n    \"preferences\": {\n      \"communication_style\": \"supportive\",\n      \"reminder_frequency\": \"weekly\",\n      \"preferred_contact\": \"chat\"\n    },\n    \"average_distress_score\": 6.2,\n    \"average_engagement_level\": 7.8\n  }\n}\n```\n\n### Profile Fields:\n- `legal_situation`: Current legal needs and case details\n- `milestones_completed`: Progress tracking through legal process\n- `current_goals`: Active objectives in the legal journey\n- `preferences`: User preferences for interaction style\n- `average_distress_score`: Emotional state tracking (0-10)\n- `average_engagement_level`: User engagement metric (0-10)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin Operations",
+      "description": "Administrative endpoints for managing system data",
+      "item": [
+        {
+          "name": "Upload Lawyers CSV",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "CSV file containing lawyer data",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/lawyers/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "lawyers", "upload"]
+            },
+            "description": "Upload lawyer data via CSV file for bulk import.\n\n**Requires admin authentication**\n\n### CSV Format:\nRequired columns:\n- `id`: Unique lawyer identifier\n- `name`: Lawyer's full name\n- `firm`: Law firm name\n\nOptional columns:\n- `practice_areas`: Comma-separated list (e.g., \"divorce,custody\")\n- `zip`: ZIP code\n- `city`: City name\n- `state`: State code\n- `description`: Profile description\n- `budget_range`: $, $$, or $$$\n- `rating`: Numeric rating (0-5)\n- `reviews_count`: Number of reviews\n\n### Example CSV:\n```csv\nid,name,firm,practice_areas,zip,city,state,budget_range,rating\nlawyer-1,Jane Smith,Smith Legal,\"divorce,custody\",94105,San Francisco,CA,$$,4.8\nlawyer-2,John Doe,Doe & Associates,\"adoption,guardianship\",10001,New York,NY,$$$,4.9\n```\n\n### Response Example:\n```json\n{\n  \"status\": \"completed\",\n  \"indexed_count\": 245,\n  \"errors\": [\n    {\n      \"row\": 15,\n      \"error\": \"Missing required field: firm\"\n    }\n  ]\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "WebSocket Examples",
+      "description": "WebSocket connection examples and message formats",
+      "item": [
+        {
+          "name": "WebSocket Connection Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ws-info",
+              "host": ["{{base_url}}"],
+              "path": ["ws-info"]
+            },
+            "description": "# WebSocket Connection Guide\n\n## Connection URL\n```\nwss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production\n```\n\n## Connection Flow\n\n### 1. Establish Connection\n```javascript\nconst ws = new WebSocket('wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production');\n\nws.onopen = () => {\n  console.log('Connected to LoveAndLaw');\n};\n```\n\n### 2. Authentication (Optional in Debug Mode)\n```javascript\n// Send auth message\nws.send(JSON.stringify({\n  type: 'auth',\n  user_id: 'user-123',\n  conversation_id: 'conv-456' // optional\n}));\n\n// Receive auth confirmation\n// {\"type\": \"auth_success\", \"user_id\": \"user-123\", \"conversation_id\": \"conv-456\"}\n```\n\n### 3. Send User Messages\n```javascript\nws.send(JSON.stringify({\n  type: 'user_msg',\n  cid: 'msg-789', // correlation ID\n  text: 'I need help with child custody arrangements'\n}));\n```\n\n### 4. Receive AI Responses\n```javascript\nws.onmessage = (event) => {\n  const data = JSON.parse(event.data);\n  \n  switch(data.type) {\n    case 'message_received':\n      // Acknowledgment\n      break;\n      \n    case 'ai_chunk':\n      // Streaming response\n      console.log('AI:', data.text);\n      break;\n      \n    case 'ai_complete':\n      // Response finished\n      break;\n      \n    case 'cards':\n      // Lawyer recommendations\n      console.log('Lawyers:', data.cards);\n      break;\n      \n    case 'reflection':\n      // Reflection prompts\n      console.log('Reflection:', data.prompt);\n      break;\n      \n    case 'suggestions':\n      // Suggested questions\n      console.log('Suggestions:', data.questions);\n      break;\n  }\n};\n```\n\n### 5. Heartbeat (Keep-Alive)\n```javascript\nsetInterval(() => {\n  if (ws.readyState === WebSocket.OPEN) {\n    ws.send(JSON.stringify({ type: 'heartbeat' }));\n  }\n}, 25000); // Every 25 seconds\n```\n\n## Message Types Reference\n\n### Client → Server\n- `auth`: Authenticate user\n- `user_msg`: Send user message\n- `heartbeat`: Keep connection alive\n\n### Server → Client\n- `connection_established`: Initial connection\n- `auth_success`: Authentication confirmed\n- `message_received`: Message acknowledged\n- `ai_chunk`: Streaming AI response\n- `ai_complete`: AI response finished\n- `cards`: Lawyer recommendations\n- `reflection`: Reflection prompts\n- `suggestions`: Suggested questions\n- `metrics`: Debug information\n- `error`: Error messages\n- `session_end`: Session terminated\n\n## Full Example\n\n```javascript\nclass LoveAndLawChat {\n  constructor() {\n    this.ws = null;\n    this.messageId = 0;\n  }\n  \n  connect() {\n    this.ws = new WebSocket('wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production');\n    \n    this.ws.onopen = () => {\n      console.log('Connected!');\n      this.authenticate();\n      this.startHeartbeat();\n    };\n    \n    this.ws.onmessage = (event) => {\n      this.handleMessage(JSON.parse(event.data));\n    };\n    \n    this.ws.onerror = (error) => {\n      console.error('WebSocket error:', error);\n    };\n    \n    this.ws.onclose = () => {\n      console.log('Disconnected');\n      this.stopHeartbeat();\n    };\n  }\n  \n  authenticate() {\n    this.send({\n      type: 'auth',\n      user_id: 'user-123'\n    });\n  }\n  \n  sendMessage(text) {\n    this.send({\n      type: 'user_msg',\n      cid: `msg-${++this.messageId}`,\n      text: text\n    });\n  }\n  \n  send(data) {\n    if (this.ws.readyState === WebSocket.OPEN) {\n      this.ws.send(JSON.stringify(data));\n    }\n  }\n  \n  handleMessage(data) {\n    switch(data.type) {\n      case 'ai_chunk':\n        // Handle streaming response\n        this.appendAIResponse(data.text);\n        break;\n      case 'cards':\n        // Display lawyer cards\n        this.showLawyerCards(data.cards);\n        break;\n      case 'suggestions':\n        // Show suggested questions\n        this.showSuggestions(data.questions);\n        break;\n      // ... handle other message types\n    }\n  }\n  \n  startHeartbeat() {\n    this.heartbeatInterval = setInterval(() => {\n      this.send({ type: 'heartbeat' });\n    }, 25000);\n  }\n  \n  stopHeartbeat() {\n    if (this.heartbeatInterval) {\n      clearInterval(this.heartbeatInterval);\n    }\n  }\n}\n\n// Usage\nconst chat = new LoveAndLawChat();\nchat.connect();\n\n// Send a message\nchat.sendMessage('I need help with divorce proceedings');\n```"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "// Add any global setup here"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script",
+          "// Add any global tests here"
+        ]
+      }
+    }
+  ]
+}
