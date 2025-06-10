@@ -1,7 +1,0 @@
-# Minimal requirements for Elasticsearch data loading
-elasticsearch==8.17.0
-pandas==2.2.3
-python-dotenv==1.0.1
-structlog==24.4.0
-pydantic==2.10.5
-pydantic-settings==2.7.0

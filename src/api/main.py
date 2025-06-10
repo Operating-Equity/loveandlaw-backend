@@ -1,16 +1,22 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import csv
 import io
+import json
+import asyncio
 from typing import Dict, Any, List
+from uuid import uuid4
+from datetime import datetime
 
 from src.config.settings import settings
 from src.services.database import initialize_databases, close_databases, elasticsearch_service, dynamodb_service
 from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse
 from src.api.auth import get_current_user
 from src.utils.logger import get_logger
+from src.core.therapeutic_engine import therapeutic_engine
+from src.services.pii_redaction import pii_service
 
 logger = get_logger(__name__)
 
@@ -51,13 +57,67 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint"""
     return {
         "status": "healthy",
         "service": "Love & Law Backend",
         "version": "1.0.0",
         "environment": settings.environment
     }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for ALB/ECS"""
+    return {
+        "status": "healthy",
+        "service": "Love & Law Backend",
+        "version": "1.0.0",
+        "environment": settings.environment
+    }
+
+
+@app.get(f"/api/{settings.api_version}/health")
+async def api_health():
+    """API health check endpoint"""
+    # Check database connectivity
+    health_status = {
+        "status": "healthy",
+        "service": "Love & Law Backend API",
+        "version": "1.0.0",
+        "environment": settings.environment,
+        "checks": {
+            "elasticsearch": "unknown",
+            "dynamodb": "unknown",
+            "redis": "unknown"
+        }
+    }
+    
+    # Check Elasticsearch
+    try:
+        if elasticsearch_service.client:
+            await elasticsearch_service.client.ping()
+            health_status["checks"]["elasticsearch"] = "healthy"
+        else:
+            health_status["checks"]["elasticsearch"] = "not_configured"
+    except Exception as e:
+        health_status["checks"]["elasticsearch"] = "unhealthy"
+        health_status["status"] = "degraded"
+    
+    # Check DynamoDB
+    try:
+        if dynamodb_service.conversations_table and dynamodb_service.profiles_table:
+            health_status["checks"]["dynamodb"] = "healthy"
+        else:
+            health_status["checks"]["dynamodb"] = "not_configured"
+    except Exception as e:
+        health_status["checks"]["dynamodb"] = "unhealthy"
+        health_status["status"] = "degraded"
+    
+    # Redis is optional
+    health_status["checks"]["redis"] = "not_implemented"
+    
+    return health_status
 
 
 @app.post(f"/api/{settings.api_version}/match")
@@ -211,6 +271,205 @@ async def get_profile(
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
         raise HTTPException(status_code=500, detail="Error fetching profile")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for chat interactions"""
+    connection_id = str(uuid4())
+    user_id = None
+    conversation_id = None
+    authenticated = False
+    
+    await websocket.accept()
+    logger.info(f"New WebSocket connection: {connection_id}")
+    
+    try:
+        # Send welcome message
+        await websocket.send_json({
+            "type": "connection_established",
+            "connection_id": connection_id,
+            "message": "Connected to Love & Law Assistant"
+        })
+        
+        # Start heartbeat task
+        heartbeat_task = asyncio.create_task(send_heartbeat(websocket))
+        
+        while True:
+            try:
+                # Receive message
+                message = await websocket.receive_json()
+                msg_type = message.get("type")
+                
+                # Handle authentication
+                if msg_type == "auth":
+                    user_id = message.get("user_id")
+                    if not user_id:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "User ID required"
+                        })
+                        continue
+                    
+                    authenticated = True
+                    conversation_id = message.get("conversation_id") or str(uuid4())
+                    
+                    await websocket.send_json({
+                        "type": "auth_success",
+                        "user_id": user_id,
+                        "conversation_id": conversation_id
+                    })
+                
+                # Handle user messages
+                elif msg_type == "user_msg":
+                    if not authenticated and not settings.debug:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Not authenticated"
+                        })
+                        continue
+                    
+                    # In debug mode, auto-authenticate
+                    if settings.debug and not authenticated:
+                        user_id = "debug_user"
+                        conversation_id = str(uuid4())
+                        authenticated = True
+                    
+                    cid = message.get("cid", str(uuid4()))
+                    user_text = message.get("text", "").strip()
+                    
+                    if not user_text:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Empty message"
+                        })
+                        continue
+                    
+                    # Acknowledge receipt
+                    await websocket.send_json({
+                        "type": "message_received",
+                        "cid": cid
+                    })
+                    
+                    # Redact PII
+                    redacted_text, found_pii = await pii_service.redact_text(user_text)
+                    
+                    if found_pii:
+                        logger.info(f"PII detected and redacted: {list(found_pii.keys())}")
+                    
+                    # Process through therapeutic engine
+                    result = await therapeutic_engine.process_turn(
+                        user_id=user_id,
+                        user_text=redacted_text,
+                        conversation_id=conversation_id
+                    )
+                    
+                    # Stream response
+                    await stream_response(websocket, cid, result)
+                
+                # Handle heartbeat
+                elif msg_type == "heartbeat":
+                    await websocket.send_json({"type": "heartbeat"})
+                
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Unknown message type: {msg_type}"
+                    })
+                    
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket disconnected: {connection_id}")
+                break
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                })
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Error processing message"
+                })
+                
+    except Exception as e:
+        logger.error(f"WebSocket connection error: {e}")
+    finally:
+        # Cancel heartbeat
+        heartbeat_task.cancel()
+        logger.info(f"WebSocket connection closed: {connection_id}")
+
+
+async def send_heartbeat(websocket: WebSocket):
+    """Send periodic heartbeat messages"""
+    try:
+        while True:
+            await asyncio.sleep(settings.ws_heartbeat_interval)
+            await websocket.send_json({
+                "type": "heartbeat",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"Heartbeat error: {e}")
+
+
+async def stream_response(websocket: WebSocket, cid: str, result: Dict[str, Any]):
+    """Stream AI response to client"""
+    
+    # Simulate streaming by chunking the response
+    response_text = result["assistant_response"]
+    chunk_size = 20  # Characters per chunk
+    
+    # Send response in chunks
+    for i in range(0, len(response_text), chunk_size):
+        chunk = response_text[i:i + chunk_size]
+        await websocket.send_json({
+            "type": "ai_chunk",
+            "cid": cid,
+            "text_fragment": chunk
+        })
+        await asyncio.sleep(0.05)  # Simulate typing
+    
+    # Send completion marker
+    await websocket.send_json({
+        "type": "ai_complete",
+        "cid": cid
+    })
+    
+    # Send lawyer cards if available
+    if result.get("lawyer_cards") and result["metrics"]["distress_score"] < 7:
+        await websocket.send_json({
+            "type": "cards",
+            "cid": cid,
+            "cards": result["lawyer_cards"]
+        })
+    
+    # Send reflection data if needed
+    if result.get("reflection", {}).get("needs_reflection"):
+        await websocket.send_json({
+            "type": "reflection",
+            "cid": cid,
+            "reflection_type": result["reflection"]["reflection_type"],
+            "reflection_insights": result["reflection"]["reflection_insights"]
+        })
+    
+    # Send suggestions
+    if result.get("suggestions"):
+        await websocket.send_json({
+            "type": "suggestions",
+            "cid": cid,
+            "suggestions": result["suggestions"]
+        })
+    
+    # Send metrics (for debugging/monitoring)
+    if settings.debug:
+        await websocket.send_json({
+            "type": "metrics",
+            "cid": cid,
+            "metrics": result["metrics"]
+        })
 
 
 @app.exception_handler(Exception)

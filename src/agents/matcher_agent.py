@@ -36,26 +36,38 @@ class MatcherAgent(BaseAgent):
                 "needed_info": self._get_missing_info(state)
             }
         
-        # Generate search embedding
-        search_embedding = await self._generate_search_embedding(state, context)
+        # Build search context from conversation
+        search_context = self._build_search_context(state, context)
         
-        # Build comprehensive search query
-        search_query = self._build_search_query(state, context)
-        
-        # Add embedding to query if generated
-        if search_embedding:
-            search_query["embedding"] = search_embedding
+        # Build filter query
+        filters = self._build_filter_query(state)
         
         # Check cache first
-        cache_key = self._generate_cache_key(search_query)
+        cache_key = self._generate_cache_key({"context": search_context, "filters": filters})
         cached_results = await self._get_cached_matches(cache_key)
         
         if cached_results:
             logger.info("Returning cached lawyer matches")
             return cached_results
         
-        # Perform search
-        lawyers = await elasticsearch_service.search_lawyers(search_query, size=10)
+        # Determine search method based on query complexity
+        if self._should_use_semantic_search(state):
+            # Use advanced semantic search for complex natural language queries
+            lawyers = await elasticsearch_service.advanced_semantic_search(
+                query_text=search_context["query"],
+                context=search_context.get("situation"),
+                filters=filters,
+                size=10
+            )
+        else:
+            # Use standard search for simpler queries
+            lawyers = await elasticsearch_service.search_lawyers(
+                query_text=search_context.get("query"),
+                filters=filters,
+                location=filters.get("location"),
+                size=10,
+                use_semantic=True
+            )
         
         # Rank and personalize results
         ranked_lawyers = await self._rank_and_personalize(lawyers, state, context)
@@ -94,64 +106,94 @@ class MatcherAgent(BaseAgent):
             missing.append("budget")
         return missing
     
-    async def _generate_search_embedding(self, state: TurnState, context: Dict[str, Any]) -> Optional[List[float]]:
-        """Generate embedding for semantic search"""
-        try:
-            # Create search context
-            search_text = f"""
-Legal needs: {', '.join(state.legal_intent)}
-Situation: {state.user_text[:200]}
-Important factors: {', '.join(state.facts.keys())}
-"""
-            
-            # For now, skip embeddings as Groq doesn't support embeddings yet
-            # In production, you might use a different embedding service
-            # response = await self.openai_client.embeddings.create(
-            #     model="text-embedding-3-small",
-            #     input=search_text
-            # )
-            
-            # Return None to skip embedding-based search
-            return None
-            
-            # embedding = response.data[0].embedding
-            # return embedding
-            
-        except Exception as e:
-            logger.error(f"Error generating embedding: {e}")
-            return None
-    
-    def _build_search_query(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Build comprehensive search query"""
-        query = {}
+    def _build_search_context(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, str]:
+        """Build search context for semantic search"""
+        # Extract key information from conversation
+        legal_needs = ', '.join(state.legal_intent) if state.legal_intent else "family law attorney"
         
-        # Location-based search
+        # Build natural language query
+        query_parts = []
+        
+        # Add legal needs
+        if state.legal_intent:
+            query_parts.append(f"lawyer for {legal_needs}")
+        
+        # Add specific requirements from facts
+        if state.facts.get("child_involved"):
+            query_parts.append("experienced with child custody")
+        if state.facts.get("domestic_violence"):
+            query_parts.append("handles domestic violence cases")
+        if state.facts.get("urgent"):
+            query_parts.append("available for urgent consultation")
+        if state.facts.get("languages"):
+            query_parts.append(f"speaks {state.facts['languages']}")
+            
+        # Build situation context
+        situation = state.user_text[:500] if state.user_text else ""
+        if context.get("user_profile", {}).get("summary"):
+            situation = f"{context['user_profile']['summary']} Current situation: {situation}"
+            
+        return {
+            "query": " ".join(query_parts) or "family law attorney",
+            "situation": situation
+        }
+    
+    def _should_use_semantic_search(self, state: TurnState) -> bool:
+        """Determine if semantic search is appropriate"""
+        # Use semantic search for complex queries or natural language
+        has_complex_needs = len(state.legal_intent) > 1 if state.legal_intent else False
+        has_specific_requirements = len(state.facts) > 3
+        has_narrative = len(state.user_text) > 100 if state.user_text else False
+        
+        return has_complex_needs or has_specific_requirements or has_narrative
+    
+    def _build_filter_query(self, state: TurnState) -> Dict[str, Any]:
+        """Build filter query for Elasticsearch"""
+        filters = {}
+        
+        # Location filters
         if state.facts.get("zip"):
-            query["zip"] = state.facts["zip"]
+            # Convert zip to coordinates if possible
+            filters["location"] = self._zip_to_coordinates(state.facts["zip"])
         elif state.facts.get("state"):
-            query["state"] = state.facts["state"]
+            filters["state"] = state.facts["state"]
+        elif state.facts.get("city") and state.facts.get("state"):
+            filters["city"] = state.facts["city"]
+            filters["state"] = state.facts["state"]
         
         # Practice areas
         if state.legal_intent:
-            query["practice_areas"] = state.legal_intent
+            filters["practice_areas"] = state.legal_intent
         
-        # Budget considerations
+        # Budget and fee structure
         if state.facts.get("budget_range"):
-            query["budget_range"] = state.facts["budget_range"]
+            if state.facts["budget_range"] == "low" or state.facts["budget_range"] == "$":
+                filters["free_consultation"] = True
+            elif state.facts["budget_range"] == "high" or state.facts["budget_range"] == "$$$":
+                filters["min_rating"] = 4.5
         
-        # Text search for specific needs
-        search_terms = []
-        if "custody" in state.legal_intent and state.facts.get("children_count"):
-            search_terms.append("child custody expert")
-        if "divorce" in state.legal_intent and "property" in state.user_text.lower():
-            search_terms.append("property division")
-        if "domestic_violence" in state.legal_intent:
-            search_terms.append("protective orders emergency")
+        # Languages
+        if state.facts.get("languages"):
+            filters["languages"] = state.facts["languages"]
         
-        if search_terms:
-            query["text"] = " ".join(search_terms)
+        # Experience level
+        if state.facts.get("experience_preference"):
+            if state.facts["experience_preference"] == "senior":
+                filters["min_experience"] = 10
+            elif state.facts["experience_preference"] == "experienced":
+                filters["min_experience"] = 5
         
-        return query
+        # Quality filters
+        if not state.facts.get("budget_range") or state.facts.get("budget_range") != "low":
+            filters["min_rating"] = 3.5
+        
+        return filters
+    
+    def _zip_to_coordinates(self, zip_code: str) -> Optional[Dict[str, float]]:
+        """Convert ZIP code to coordinates (simplified - in production use geocoding service)"""
+        # This is a placeholder - in production, use a geocoding service
+        # For now, return None to use text-based location search
+        return None
     
     async def _rank_and_personalize(
         self, 

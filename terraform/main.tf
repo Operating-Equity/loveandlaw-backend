@@ -1,13 +1,13 @@
 terraform {
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
-  
   backend "s3" {
-    bucket = "loveandlaw-terraform-state"
+    bucket = "loveandlaw-terraform-state-085603066392"
     key    = "backend/terraform.tfstate"
     region = "us-east-1"
   }
@@ -17,221 +17,124 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Variables
-variable "aws_region" {
-  default = "us-east-1"
+# VPC and Networking
+module "networking" {
+  source = "./modules/networking"
+  
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_cidr     = var.vpc_cidr
+  availability_zones = var.availability_zones
 }
 
-variable "environment" {
-  default = "production"
-}
-
-variable "app_name" {
-  default = "loveandlaw"
-}
-
-# VPC
-module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
-  version = "5.0.0"
-
-  name = "${var.app_name}-vpc"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["${var.aws_region}a", "${var.aws_region}b"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
-
-  enable_nat_gateway = true
-  enable_vpn_gateway = false
-  enable_dns_hostnames = true
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
-}
-
-# Security Groups
-resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg"
-  description = "Security group for ALB"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "ecs" {
-  name        = "${var.app_name}-ecs-sg"
-  description = "Security group for ECS tasks"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port       = 8000
-    to_port         = 8000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# DynamoDB Tables
-resource "aws_dynamodb_table" "conversations" {
-  name           = "${var.app_name}-conversations"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "user_id"
-  range_key      = "turn_id"
-
-  attribute {
-    name = "user_id"
-    type = "S"
-  }
-
-  attribute {
-    name = "turn_id"
-    type = "S"
-  }
-
-  ttl {
-    attribute_name = "ttl"
-    enabled        = true
-  }
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
-}
-
-resource "aws_dynamodb_table" "profiles" {
-  name           = "${var.app_name}-profiles"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "user_id"
-
-  attribute {
-    name = "user_id"
-    type = "S"
-  }
-
-  ttl {
-    attribute_name = "ttl"
-    enabled        = true
-  }
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
-}
-
-# OpenSearch Domain
-resource "aws_opensearch_domain" "lawyers" {
-  domain_name    = "${var.app_name}-lawyers"
-  engine_version = "OpenSearch_2.11"
-
-  cluster_config {
-    instance_type  = "m5.large.search"
-    instance_count = 2
-  }
-
-  ebs_options {
-    ebs_enabled = true
-    volume_type = "gp3"
-    volume_size = 100
-  }
-
-  node_to_node_encryption {
-    enabled = true
-  }
-
-  encrypt_at_rest {
-    enabled = true
-  }
-
-  domain_endpoint_options {
-    enforce_https       = true
-    tls_security_policy = "Policy-Min-TLS-1-2-2019-07"
-  }
-
-  advanced_security_options {
-    enabled                        = true
-    internal_user_database_enabled = true
-    master_user_options {
-      master_user_name     = "admin"
-      master_user_password = var.opensearch_master_password
-    }
-  }
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
-}
-
-# ElastiCache Redis
-resource "aws_elasticache_subnet_group" "redis" {
-  name       = "${var.app_name}-redis-subnet"
-  subnet_ids = module.vpc.private_subnets
-}
-
-resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = "${var.app_name}-redis"
-  engine               = "redis"
-  node_type            = "cache.t3.micro"
-  num_cache_nodes      = 1
-  parameter_group_name = "default.redis7"
-  port                 = 6379
-  subnet_group_name    = aws_elasticache_subnet_group.redis.name
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
+# Database Resources
+module "database" {
+  source = "./modules/database"
+  
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id       = module.networking.vpc_id
+  private_subnets = module.networking.private_subnets
 }
 
 # Secrets Manager
 resource "aws_secretsmanager_secret" "api_keys" {
-  name = "${var.app_name}/api-keys"
+  name = "${var.project_name}-${var.environment}-api-keys"
   
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "api_keys" {
+  secret_id = aws_secretsmanager_secret.api_keys.id
+  secret_string = jsonencode({
+    GROQ_API_KEY      = var.groq_api_key
+    ANTHROPIC_API_KEY = var.anthropic_api_key
+    JWT_SECRET_KEY    = var.jwt_secret_key
+    ELASTICSEARCH_API_KEY = var.elasticsearch_api_key
+  })
+}
+
+# ECS Cluster and Services
+module "ecs" {
+  source = "./modules/ecs"
+  
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id       = module.networking.vpc_id
+  private_subnets = module.networking.private_subnets
+  public_subnets  = module.networking.public_subnets
+  
+  # Container configuration
+  container_image = var.container_image
+  container_cpu   = var.container_cpu
+  container_memory = var.container_memory
+  
+  # Secrets from AWS Secrets Manager
+  secrets_arn = aws_secretsmanager_secret.api_keys.arn
+  
+  # Database endpoints
+  dynamodb_tables = module.database.dynamodb_tables
+  redis_endpoint  = module.database.redis_endpoint
+  redis_auth_secret_arn = module.database.redis_auth_secret_arn
+  elasticsearch_endpoint = var.elasticsearch_endpoint # Using existing Elastic Cloud
+}
+
+# API Gateway
+module "api_gateway" {
+  source = "./modules/api-gateway"
+  
+  project_name = var.project_name
+  environment  = var.environment
+  alb_endpoint = module.ecs.alb_endpoint
+  vpc_link_id  = module.networking.vpc_link_id
+}
+
+# Monitoring
+module "monitoring" {
+  source = "./modules/monitoring"
+  
+  project_name = var.project_name
+  environment  = var.environment
+  ecs_cluster_name = module.ecs.cluster_name
+  alb_arn = module.ecs.alb_arn
+  api_endpoint = trimprefix(module.api_gateway.rest_api_endpoint, "https://")
+  alert_email = var.alert_email
 }
 
 # S3 Buckets
-resource "aws_s3_bucket" "data" {
-  bucket = "${var.app_name}-data-${data.aws_caller_identity.current.account_id}"
-  
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
+resource "aws_s3_bucket" "logs" {
+  bucket = "${var.project_name}-${var.environment}-logs"
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    id     = "archive-old-logs"
+    status = "Enabled"
+    
+    filter {
+      prefix = ""
+    }
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 365
+    }
   }
+}
+
+resource "aws_s3_bucket" "data" {
+  bucket = "${var.project_name}-${var.environment}-data"
 }
 
 resource "aws_s3_bucket_versioning" "data" {
@@ -241,52 +144,148 @@ resource "aws_s3_bucket_versioning" "data" {
   }
 }
 
-# ECR Repository
-resource "aws_ecr_repository" "backend" {
-  name                 = "${var.app_name}-backend"
-  image_tag_mutability = "MUTABLE"
+# CloudFront Distribution
+resource "aws_cloudfront_distribution" "main" {
+  enabled = true
+  comment = "${var.project_name} ${var.environment} distribution"
+  
+  origin {
+    domain_name = module.api_gateway.rest_api_domain
+    origin_id   = "rest-api"
+    
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+  
+  origin {
+    domain_name = module.api_gateway.websocket_api_domain
+    origin_id   = "websocket-api"
+    
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+  
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "rest-api"
+    
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      
+      cookies {
+        forward = "all"
+      }
+    }
+    
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+  
+  ordered_cache_behavior {
+    path_pattern     = "/ws/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "websocket-api"
+    
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      
+      cookies {
+        forward = "all"
+      }
+    }
+    
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+  
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+  
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+  
+  web_acl_id = aws_wafv2_web_acl.main.arn
+}
 
-  image_scanning_configuration {
-    scan_on_push = true
+# WAF for CloudFront
+resource "aws_wafv2_web_acl" "main" {
+  name  = "${var.project_name}-${var.environment}-waf"
+  scope = "CLOUDFRONT"
+
+  default_action {
+    allow {}
   }
 
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
+  rule {
+    name     = "RateLimitRule"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "WAF"
+    sampled_requests_enabled   = true
   }
 }
 
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = "${var.app_name}-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-
-  tags = {
-    Environment = var.environment
-    Application = var.app_name
-  }
-}
-
-# Data source for current AWS account
-data "aws_caller_identity" "current" {}
-
-# Outputs
-output "vpc_id" {
-  value = module.vpc.vpc_id
-}
-
-output "private_subnet_ids" {
-  value = module.vpc.private_subnets
-}
-
-output "opensearch_endpoint" {
-  value = aws_opensearch_domain.lawyers.endpoint
-}
-
-output "redis_endpoint" {
-  value = aws_elasticache_cluster.redis.cache_nodes[0].address
-}
+# WAF association is done through web_acl_id in the main CloudFront distribution
+# Remove this duplicate resource

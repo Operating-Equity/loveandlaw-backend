@@ -6,6 +6,9 @@ This defines the schema for efficient lawyer search with both keyword (BM25) and
 from typing import Dict, Any
 
 
+# Index name as specified in documentation
+LAWYER_INDEX_NAME = "love-and-law-001"
+
 LAWYER_INDEX_MAPPING: Dict[str, Any] = {
     "settings": {
         "analysis": {
@@ -30,7 +33,9 @@ LAWYER_INDEX_MAPPING: Dict[str, Any] = {
         "index": {
             "number_of_shards": 3,
             "number_of_replicas": 1,
-            "refresh_interval": "30s"
+            "refresh_interval": "30s",
+            # Enable ELSER model for semantic search
+            "default_pipeline": "elser-v2-pipeline"
         }
     },
     "mappings": {
@@ -210,7 +215,25 @@ LAWYER_INDEX_MAPPING: Dict[str, Any] = {
                 "analyzer": "description_analyzer"
             },
 
-            # Dense vectors for semantic search
+            # Semantic search fields using ELSER model
+            "profile_semantic": {
+                "type": "semantic_text",
+                "inference_id": ".elser-2-elasticsearch"  # Built-in ELSER v2 model
+            },
+            "specialties_semantic": {
+                "type": "semantic_text",
+                "inference_id": ".elser-2-elasticsearch"
+            },
+            "experience_semantic": {
+                "type": "semantic_text",
+                "inference_id": ".elser-2-elasticsearch"
+            },
+            "reviews_semantic": {
+                "type": "semantic_text",
+                "inference_id": ".elser-2-elasticsearch"
+            },
+
+            # Dense vectors for additional semantic search (optional fallback)
             "profile_embedding": {
                 "type": "dense_vector",
                 "dims": 1536,  # OpenAI ada-3 dimensions
@@ -363,7 +386,7 @@ SEARCH_TEMPLATES = {
 }
 
 
-def get_index_settings(index_name: str = "lawyers_v1") -> Dict[str, Any]:
+def get_index_settings(index_name: str = LAWYER_INDEX_NAME) -> Dict[str, Any]:
     """Get the complete index settings including aliases."""
     return {
         "index": index_name,

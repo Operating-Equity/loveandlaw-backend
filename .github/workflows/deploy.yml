@@ -4,21 +4,86 @@ on:
   push:
     branches:
       - main
+      - staging
+      - develop
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-east-2
   ECR_REPOSITORY: loveandlaw-backend
   ECS_SERVICE: loveandlaw-api
   ECS_CLUSTER: loveandlaw-cluster
+  TASK_DEFINITION: task-def.json
 
 jobs:
-  deploy:
-    name: Deploy
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10']
     
     steps:
-    - name: Checkout
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-cov
+
+    - name: Run tests
+      run: |
+        pytest -v --cov=src --cov-report=xml
+      env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ELASTICSEARCH_URL: http://localhost:9200
+        ENVIRONMENT: test
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    
+    steps:
+    - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Configure AWS credentials
@@ -32,49 +97,259 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Build, tag, and push image to Amazon ECR
-      id: build-image
+      id: image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        # Build multi-architecture image
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          --cache-from type=gha \
+          --cache-to type=gha,mode=max \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+          --push \
+          -f Dockerfile.optimized .
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Download task definition
-      run: |
-        aws ecs describe-task-definition \
-          --task-definition loveandlaw-backend \
-          --query taskDefinition > task-definition.json
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Fill in the new image ID in the Amazon ECS task definition
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
-        task-definition: task-definition.json
-        container-name: api
-        image: ${{ steps.build-image.outputs.image }}
+        task-definition: ${{ env.TASK_DEFINITION }}
+        container-name: loveandlaw-api
+        image: ${{ needs.build.outputs.image }}
+        environment-variables: |
+          ENVIRONMENT=staging
+          ELASTICSEARCH_URL=${{ secrets.STAGING_ELASTICSEARCH_URL }}
+          ELASTICSEARCH_API_KEY=${{ secrets.STAGING_ELASTICSEARCH_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          AWS_REGION=${{ env.AWS_REGION }}
+          DYNAMODB_TABLE_PREFIX=staging-
+          REDIS_URL=${{ secrets.STAGING_REDIS_URL }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          LOG_LEVEL=INFO
 
-    - name: Deploy Amazon ECS task definition
+    - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
+        service: ${{ env.ECS_SERVICE }}-staging
+        cluster: ${{ env.ECS_CLUSTER }}-staging
         wait-for-service-stability: true
 
-  notify:
-    name: Notify
-    needs: deploy
+    - name: Update API Gateway
+      run: |
+        # Update API Gateway integration with new ECS service
+        aws apigatewayv2 update-integration \
+          --api-id ${{ secrets.STAGING_API_GATEWAY_ID }} \
+          --integration-id ${{ secrets.STAGING_INTEGRATION_ID }} \
+          --connection-id ${{ secrets.STAGING_VPC_LINK_ID }}
+
+    - name: Invalidate CloudFront cache
+      run: |
+        aws cloudfront create-invalidation \
+          --distribution-id ${{ secrets.STAGING_CLOUDFRONT_ID }} \
+          --paths "/*"
+
+  deploy-production:
+    needs: build
     runs-on: ubuntu-latest
-    if: always()
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: production
     
     steps:
-    - name: Notify success
-      if: ${{ needs.deploy.result == 'success' }}
-      run: echo "Deployment successful!"
-      
-    - name: Notify failure
-      if: ${{ needs.deploy.result == 'failure' }}
-      run: echo "Deployment failed!"
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.TASK_DEFINITION }}
+        container-name: loveandlaw-api
+        image: ${{ needs.build.outputs.image }}
+        environment-variables: |
+          ENVIRONMENT=production
+          ELASTICSEARCH_URL=${{ secrets.PROD_ELASTICSEARCH_URL }}
+          ELASTICSEARCH_API_KEY=${{ secrets.PROD_ELASTICSEARCH_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          AWS_REGION=${{ env.AWS_REGION }}
+          DYNAMODB_TABLE_PREFIX=prod-
+          REDIS_URL=${{ secrets.PROD_REDIS_URL }}
+          JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}
+          LOG_LEVEL=WARNING
+
+    - name: Deploy to Amazon ECS (Blue/Green)
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}-prod
+        cluster: ${{ env.ECS_CLUSTER }}-prod
+        wait-for-service-stability: true
+        codedeploy-appspec: appspec.yaml
+        codedeploy-application: loveandlaw
+        codedeploy-deployment-group: prod-deployment
+
+    - name: Run health checks
+      run: |
+        # Wait for new deployment to be healthy
+        sleep 60
+        
+        # Check health endpoint
+        HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.loveandlaw.com/health)
+        if [ $HEALTH_STATUS -ne 200 ]; then
+          echo "Health check failed with status $HEALTH_STATUS"
+          exit 1
+        fi
+        
+        # Test WebSocket connection
+        python scripts/test-websocket-health.py wss://api.loveandlaw.com/ws
+
+    - name: Update API Gateway
+      run: |
+        # Update API Gateway integration with new ECS service
+        aws apigatewayv2 update-integration \
+          --api-id ${{ secrets.PROD_API_GATEWAY_ID }} \
+          --integration-id ${{ secrets.PROD_INTEGRATION_ID }} \
+          --connection-id ${{ secrets.PROD_VPC_LINK_ID }}
+
+    - name: Invalidate CloudFront cache
+      run: |
+        aws cloudfront create-invalidation \
+          --distribution-id ${{ secrets.PROD_CLOUDFRONT_ID }} \
+          --paths "/*"
+
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          Production deployment ${{ job.status }}
+          Commit: ${{ github.sha }}
+          Author: ${{ github.actor }}
+          Message: ${{ github.event.head_commit.message }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.9.8
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+
+    - name: Terraform Format Check
+      working-directory: ./terraform
+      run: terraform fmt -check
+
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: |
+        terraform plan -out=tfplan
+        terraform show -no-color tfplan > plan.txt
+
+    - name: Comment PR with Terraform Plan
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const plan = fs.readFileSync('terraform/plan.txt', 'utf8');
+          const output = `#### Terraform Plan 📖
+          <details><summary>Show Plan</summary>
+          
+          \`\`\`terraform
+          ${plan}
+          \`\`\`
+          
+          </details>
+          
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Run Bandit security linter
+      run: |
+        pip install bandit
+        bandit -r src/ -f json -o bandit-results.json || true
+
+    - name: Upload Bandit results
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-results
+        path: bandit-results.json

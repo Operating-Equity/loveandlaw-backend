@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Database Configuration
     dynamodb_endpoint: Optional[str] = Field(None, env="DYNAMODB_ENDPOINT")
     elasticsearch_url: str = Field(default="http://localhost:9200", env="ELASTICSEARCH_URL")
+    elasticsearch_api_key: Optional[str] = Field(None, env="ELASTICSEARCH_API_KEY")
     redis_url: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     
     # Security

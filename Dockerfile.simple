@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy only essential files first
+COPY requirements.txt .
+
+# Install dependencies with timeout and retry
+RUN pip install --no-cache-dir --timeout=120 -r requirements.txt || \
+    (sleep 5 && pip install --no-cache-dir --timeout=120 -r requirements.txt)
+
+# Copy application
+COPY src ./src
+COPY main.py .
+COPY prompts ./prompts
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

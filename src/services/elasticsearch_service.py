@@ -30,13 +30,29 @@ class ElasticsearchService:
 
     async def initialize(self):
         """Initialize Elasticsearch connection and ensure indices exist."""
-        self.client = AsyncElasticsearch(
-            hosts=[settings.ELASTICSEARCH_URL],
-            http_auth=(settings.ELASTICSEARCH_USER, settings.ELASTICSEARCH_PASSWORD)
-            if settings.ELASTICSEARCH_USER else None,
-            verify_certs=False,
-            ssl_show_warn=False
-        )
+        # Configure connection based on whether API key is provided
+        if hasattr(settings, 'elasticsearch_api_key') and settings.elasticsearch_api_key:
+            # Use API key authentication for Elastic Cloud
+            self.client = AsyncElasticsearch(
+                hosts=[settings.elasticsearch_url],
+                api_key=settings.elasticsearch_api_key,
+                verify_certs=True
+            )
+        elif hasattr(settings, 'ELASTICSEARCH_USER') and settings.ELASTICSEARCH_USER:
+            # Use basic auth if available
+            self.client = AsyncElasticsearch(
+                hosts=[settings.ELASTICSEARCH_URL],
+                http_auth=(settings.ELASTICSEARCH_USER, settings.ELASTICSEARCH_PASSWORD),
+                verify_certs=False,
+                ssl_show_warn=False
+            )
+        else:
+            # Basic connection for local development
+            self.client = AsyncElasticsearch(
+                hosts=[settings.elasticsearch_url],
+                verify_certs=False,
+                ssl_show_warn=False
+            )
 
         # Check connection
         if not await self.client.ping():
@@ -283,6 +299,97 @@ class ElasticsearchService:
             suggestions.append(option["_source"])
 
         return suggestions
+
+    async def advanced_semantic_search(self,
+                                      query_text: str,
+                                      context: Optional[str] = None,
+                                      filters: Optional[Dict[str, Any]] = None,
+                                      size: int = 10) -> List[Dict[str, Any]]:
+        """
+        Advanced semantic search specifically optimized for natural language queries.
+        
+        Args:
+            query_text: Natural language query
+            context: Additional context about the user's situation
+            filters: Standard filters (location, budget, etc.)
+            size: Number of results
+        """
+        # Build enhanced query with context
+        enhanced_query = query_text
+        if context:
+            enhanced_query = f"{context} Looking for: {query_text}"
+            
+        # Build semantic-focused query
+        query = {
+            "bool": {
+                "should": [
+                    # Primary semantic search
+                    {
+                        "semantic": {
+                            "field": "profile_semantic",
+                            "query": enhanced_query,
+                            "boost": 3.0
+                        }
+                    },
+                    {
+                        "semantic": {
+                            "field": "specialties_semantic",
+                            "query": query_text,  # Use original for specialties
+                            "boost": 2.5
+                        }
+                    },
+                    # Fallback text search for exact matches
+                    {
+                        "multi_match": {
+                            "query": query_text,
+                            "fields": ["name^2", "practice_areas^1.5"],
+                            "type": "phrase_prefix"
+                        }
+                    }
+                ],
+                "filter": [],
+                "minimum_should_match": 1
+            }
+        }
+        
+        # Apply filters
+        if filters:
+            filter_queries = self._build_filter_queries(filters)
+            query["bool"]["filter"].extend(filter_queries)
+            
+        # Always filter for active lawyers
+        query["bool"]["filter"].append({"term": {"active": True}})
+        
+        # Execute search with special handling for semantic fields
+        response = await self.client.search(
+            index=self.index_name,
+            body={
+                "query": query,
+                "size": size,
+                "_source": {
+                    "excludes": [
+                        "*_embedding",
+                        "*_semantic",
+                        "*_semantic_input"
+                    ]
+                },
+                "sort": [
+                    "_score",
+                    {"ratings.overall": {"order": "desc", "missing": "_last"}}
+                ],
+                "explain": False  # Set to True for debugging
+            }
+        )
+        
+        # Process and return results
+        results = []
+        for hit in response["hits"]["hits"]:
+            lawyer = hit["_source"]
+            lawyer["match_score"] = hit["_score"]
+            lawyer["match_type"] = "semantic"
+            results.append(lawyer)
+            
+        return results
 
     async def close(self):
         """Close Elasticsearch connection."""

@@ -1,0 +1,5 @@
+# GitHub Actions secrets and local files
+.env
+.env.local
+*.secret
+local-testing/

@@ -163,7 +163,21 @@ class ElasticsearchService:
     async def initialize(self):
         """Initialize Elasticsearch connection"""
         try:
-            self.client = AsyncElasticsearch([settings.elasticsearch_url])
+            # Configure connection based on whether API key is provided
+            if settings.elasticsearch_api_key:
+                # Use API key authentication for Elastic Cloud
+                self.client = AsyncElasticsearch(
+                    [settings.elasticsearch_url],
+                    api_key=settings.elasticsearch_api_key,
+                    verify_certs=True
+                )
+            else:
+                # Basic connection for local development
+                self.client = AsyncElasticsearch([settings.elasticsearch_url])
+            
+            # Test connection
+            info = await self.client.info()
+            logger.info(f"Connected to Elasticsearch cluster: {info['cluster_name']}")
             
             # Create index if it doesn't exist
             if not await self.client.indices.exists(index=self.index_name):

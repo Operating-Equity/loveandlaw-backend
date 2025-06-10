@@ -1,0 +1,23 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: <TASK_DEFINITION>
+        LoadBalancerInfo:
+          ContainerName: "loveandlaw-api"
+          ContainerPort: 8000
+        PlatformVersion: "LATEST"
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            Subnets:
+              - "subnet-xxxxxx"  # Replace with your subnet IDs
+              - "subnet-yyyyyy"
+            SecurityGroups:
+              - "sg-xxxxxx"    # Replace with your security group ID
+            AssignPublicIp: "DISABLED"
+Hooks:
+  - BeforeInstall: "aws:autoscaling:terminate"
+  - AfterInstall: "aws:autoscaling:resume"
+  - ApplicationStart: "aws:autoscaling:wait"
+  - ValidateService: "aws:lambda:deploymentvalidation"

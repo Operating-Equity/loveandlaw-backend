@@ -307,6 +307,15 @@ The LoveAndLaw backend has been completely implemented with all core features wo
 - PII redaction on all user input
 - Extensible agent architecture
 
+### Recently Implemented ✅
+- **Semantic Search with ELSER Model**: 
+  - Index name updated to "love-and-law-001" as specified
+  - Elasticsearch mapping includes semantic_text fields for profile, specialties, experience, and reviews
+  - New upload script `scripts/upload_semantic_data.py` processes lawyer data with semantic fields
+  - Enhanced search service with `advanced_semantic_search` method using ELSER queries
+  - MatcherAgent intelligently chooses between standard and semantic search based on query complexity
+  - Test script `test_semantic_search.py` to verify semantic search functionality
+
 ### Not Yet Implemented (Future Enhancements)
 - **Human mediator loop**: For complex custody disputes
 - **Voice integration**: Client-side responsibility
@@ -332,7 +341,13 @@ See TODO.md for detailed implementation roadmap. Key priorities:
 
 - **Data Directory**: `.data/` contains all CSV files (merged lawyers, reviews, scorecards, etc.)
 - **Elasticsearch Setup**: 
-  - Start with: `./start-elasticsearch.sh` (requires Docker)
+  - **Elastic Cloud Configuration**:
+    - URL: `https://b202eece25af4ba8a7cc89b05922ac28.us-east-2.aws.elastic-cloud.com:443`
+    - API Key: Configured in `.env` as `ELASTICSEARCH_API_KEY`
+    - Test connection: `python test_elasticsearch_connection.py`
+  - **Local Development** (alternative):
+    - Start with: `./start-elasticsearch.sh` (requires Docker)
+    - URL: `http://localhost:9200`
   - Load data with: `source venv/bin/activate && python scripts/load_lawyer_data.py`
 - **Testing**: Run `python test_data_loading.py` to verify setup
 
