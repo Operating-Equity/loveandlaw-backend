@@ -3,8 +3,8 @@
 from typing import Dict, Any, Optional, List
 from .base import LegalSpecialistAgent, LegalSchemaField
 from ...utils.logger import get_logger
+from ...config.settings import settings
 from groq import Groq
-import os
 
 logger = get_logger(__name__)
 
@@ -15,7 +15,7 @@ class FamilyLawAgent(LegalSpecialistAgent):
     def __init__(self):
         """Initialize the family law agent."""
         super().__init__(name="FamilyLawAgent")
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        self.client = Groq(api_key=settings.groq_api_key)
         self.prompt_template = self._load_prompt_template()
         
     def _load_prompt_template(self) -> str:

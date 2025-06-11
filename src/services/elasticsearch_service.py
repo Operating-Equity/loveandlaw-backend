@@ -211,10 +211,8 @@ class ElasticsearchService:
                 }
             })
 
-        # Add quality boosting factors
+        # Add quality boosting factors (removed numeric comparisons that might fail with string data)
         query["bool"]["should"].extend([
-            {"range": {"ratings.overall": {"gte": 4.0, "boost": 2.0}}},
-            {"range": {"years_of_experience": {"gte": 10, "boost": 1.5}}},
             {"term": {"active": {"value": True, "boost": 3.0}}}
         ])
 
@@ -509,19 +507,27 @@ class ElasticsearchService:
         contexts = {}
         if lawyer.get("state"):
             contexts["state"] = [lawyer["state"]]
-        if lawyer.get("practice_areas"):
-            contexts["specialty"] = lawyer["practice_areas"][:3]  # Top 3 specialties
-
+            
+        # Ensure practice_areas is a list
+        practice_areas = lawyer.get("practice_areas", [])
+        if isinstance(practice_areas, str):
+            practice_areas = [practice_areas]
+        elif not isinstance(practice_areas, list):
+            practice_areas = []
+            
+        if practice_areas:
+            contexts["specialty"] = practice_areas[:3]  # Top 3 specialties
+            
         return {
             "lawyer_id": lawyer["id"],
             "suggest": {
-                "input": [lawyer["name"]] + (lawyer.get("practice_areas", [])[:3]),
+                "input": [lawyer["name"]] + practice_areas[:3],
                 "contexts": contexts
             },
             "name": lawyer["name"],
             "city": lawyer.get("city"),
             "state": lawyer.get("state"),
-            "specialties": lawyer.get("practice_areas", [])[:3]
+            "specialties": practice_areas[:3]
         }
 
     def _generate_match_explanation(self, hit: Dict[str, Any], query_text: Optional[str]) -> str:
@@ -532,11 +538,23 @@ class ElasticsearchService:
             explanations.append(f"Profile matches '{query_text}'")
 
         source = hit["_source"]
-        if source.get("ratings", {}).get("overall", 0) >= 4.5:
-            explanations.append("Highly rated lawyer")
+        rating = source.get("ratings", {}).get("overall", 0)
+        try:
+            if isinstance(rating, str):
+                rating = float(rating)
+            if rating >= 4.5:
+                explanations.append("Highly rated lawyer")
+        except (ValueError, TypeError):
+            pass
 
-        if source.get("years_of_experience", 0) >= 15:
-            explanations.append("Extensive experience")
+        years_exp = source.get("years_of_experience", 0)
+        try:
+            if isinstance(years_exp, str):
+                years_exp = int(years_exp)
+            if years_exp >= 15:
+                explanations.append("Extensive experience")
+        except (ValueError, TypeError):
+            pass
 
         return " • ".join(explanations) if explanations else "General match"
 

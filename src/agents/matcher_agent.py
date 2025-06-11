@@ -90,21 +90,62 @@ class MatcherAgent(BaseAgent):
         return result
     
     def _has_sufficient_info(self, state: TurnState) -> bool:
-        """Check if we have enough info to match lawyers"""
-        has_location = bool(state.facts.get("zip") or state.facts.get("state"))
-        has_legal_need = bool(state.legal_intent)
-        return has_location and has_legal_need
+        """Check if we have enough info to match lawyers - be more thorough"""
+        
+        # Count how many key signals we have
+        signal_score = 0
+        required_signals = []
+        
+        # Location (essential)
+        if state.facts.get("zip") or (state.facts.get("city") and state.facts.get("state")):
+            signal_score += 2
+        else:
+            required_signals.append("location")
+            
+        # Legal need (essential)
+        if state.legal_intent and len(state.legal_intent) > 0:
+            signal_score += 2
+        else:
+            required_signals.append("specific legal issue")
+            
+        # Budget information (very important)
+        if state.facts.get("budget_amount") or state.facts.get("budget_range"):
+            signal_score += 2
+        else:
+            required_signals.append("budget")
+            
+        # Timeline/urgency
+        if state.facts.get("timeline") or state.facts.get("urgency"):
+            signal_score += 1
+        else:
+            required_signals.append("timeline")
+            
+        # Family situation (if relevant)
+        if "custody" in state.legal_intent or "child_support" in state.legal_intent:
+            if state.facts.get("children_count") or state.facts.get("family"):
+                signal_score += 1
+            else:
+                required_signals.append("family details")
+                
+        # Special circumstances
+        if state.facts.get("special_circumstances") or state.facts.get("preferences"):
+            signal_score += 1
+            
+        # Goals and priorities
+        if state.facts.get("goals") or state.facts.get("priorities"):
+            signal_score += 1
+            
+        # Store what's missing for later use
+        self._missing_signals = required_signals
+        
+        # Need at least 6 points to proceed with matching
+        # This ensures we have location + legal need + at least one other major factor
+        return signal_score >= 6
     
     def _get_missing_info(self, state: TurnState) -> List[str]:
         """Identify what information is missing"""
-        missing = []
-        if not state.facts.get("zip") and not state.facts.get("state"):
-            missing.append("location")
-        if not state.legal_intent:
-            missing.append("legal_need")
-        if not state.facts.get("budget_range"):
-            missing.append("budget")
-        return missing
+        # Return the signals identified during sufficient_info check
+        return getattr(self, '_missing_signals', [])
     
     def _build_search_context(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, str]:
         """Build search context for semantic search"""

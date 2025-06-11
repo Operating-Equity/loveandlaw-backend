@@ -20,10 +20,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.services.elasticsearch_service import elasticsearch_service
 from src.models.elasticsearch_mapping import LAWYER_INDEX_NAME, LAWYER_INDEX_MAPPING
-from src.utils.logger import setup_logger
+from src.utils.logger import get_logger
 from src.config.settings import settings
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class SemanticDataUploader:

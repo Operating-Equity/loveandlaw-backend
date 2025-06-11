@@ -210,6 +210,27 @@ class ChatEdgeService:
                 conversation_id=connection.conversation_id
             )
             
+            # Validate result structure
+            if not result or not isinstance(result, dict):
+                raise ValueError("Invalid response from therapeutic engine")
+            
+            # Log the result for debugging
+            logger.info(f"Therapeutic engine result keys: {list(result.keys())}")
+            logger.info(f"Assistant response present: {'assistant_response' in result}")
+            if "assistant_response" in result:
+                logger.info(f"Assistant response length: {len(result['assistant_response'])}")
+                logger.info(f"Assistant response preview: {result['assistant_response'][:100]}...")
+            
+            # The therapeutic engine should ALWAYS provide a response
+            # If it doesn't, there's a bug that needs fixing
+            if "assistant_response" not in result:
+                logger.error("Therapeutic engine did not provide assistant_response")
+                raise ValueError("Therapeutic engine failed to generate response")
+            
+            if "metrics" not in result:
+                logger.error("Therapeutic engine did not provide metrics")
+                raise ValueError("Therapeutic engine failed to generate metrics")
+            
             # Stream response
             await self._stream_response(connection, cid, result)
             
@@ -226,16 +247,23 @@ class ChatEdgeService:
         """Stream AI response to client"""
         
         # Simulate streaming by chunking the response
-        response_text = result["assistant_response"]
+        response_text = result.get("assistant_response", "")
+        logger.info(f"Streaming response of length {len(response_text)}")
+        
+        if not response_text:
+            logger.error("No assistant_response to stream!")
+            return
+            
         chunk_size = 20  # Characters per chunk
         
         # Send response in chunks
         for i in range(0, len(response_text), chunk_size):
             chunk = response_text[i:i + chunk_size]
+            logger.debug(f"Sending chunk {i//chunk_size + 1}: {chunk}")
             await connection.send_message({
                 "type": "ai_chunk",
                 "cid": cid,
-                "text_fragment": chunk
+                "text": chunk
             })
             await asyncio.sleep(0.05)  # Simulate typing
         

@@ -33,9 +33,7 @@ LAWYER_INDEX_MAPPING: Dict[str, Any] = {
         "index": {
             "number_of_shards": 3,
             "number_of_replicas": 1,
-            "refresh_interval": "30s",
-            # Enable ELSER model for semantic search
-            "default_pipeline": "elser-v2-pipeline"
+            "refresh_interval": "30s"
         }
     },
     "mappings": {

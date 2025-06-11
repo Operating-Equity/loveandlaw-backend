@@ -69,46 +69,61 @@ class ProfileAgent(BaseAgent):
     
     async def _fetch_or_create_profile(self, user_id: str) -> Dict[str, Any]:
         """Fetch existing profile or create new one"""
-        profile_data = await dynamodb_service.get_user_profile(user_id)
-        
-        if not profile_data:
-            # Create new profile
-            new_profile = UserProfile(user_id=user_id)
-            profile_data = new_profile.dict()
+        try:
+            profile_data = await dynamodb_service.get_user_profile(user_id)
             
-            # Save to database
-            await dynamodb_service.update_user_profile(user_id, profile_data)
-            logger.info(f"Created new profile for user {user_id}")
-        
-        return profile_data
+            if not profile_data:
+                # Create new profile
+                new_profile = UserProfile(user_id=user_id)
+                profile_data = new_profile.dict()
+                
+                # Try to save to database
+                try:
+                    await dynamodb_service.update_user_profile(user_id, profile_data)
+                    logger.info(f"Created new profile for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Could not save profile to DynamoDB: {e}. Using in-memory profile.")
+            
+            return profile_data
+            
+        except Exception as e:
+            logger.warning(f"Could not fetch profile from DynamoDB: {e}. Creating default profile.")
+            # Return default profile if DynamoDB is not available
+            new_profile = UserProfile(user_id=user_id)
+            return new_profile.dict()
     
     async def _get_recent_summaries(self, user_id: str) -> List[str]:
         """Get recent conversation summaries"""
-        # Fetch recent turns
-        recent_turns = await dynamodb_service.get_recent_turns(user_id, limit=20)
-        
-        if not recent_turns:
-            return []
-        
-        # Group by conversation and summarize
-        summaries = []
-        current_summary = []
-        
-        for turn in recent_turns:
-            if turn.get("user_text") and turn.get("assistant_response"):
-                summary_line = f"User: {turn['user_text'][:100]}... Assistant: {turn['assistant_response'][:100]}..."
-                current_summary.append(summary_line)
-                
-                # Create summary every 5 turns
-                if len(current_summary) >= 5:
-                    summaries.append("\n".join(current_summary))
-                    current_summary = []
-        
-        # Add remaining turns
-        if current_summary:
-            summaries.append("\n".join(current_summary))
-        
-        return summaries[-3:]  # Return last 3 summaries
+        try:
+            # Fetch recent turns
+            recent_turns = await dynamodb_service.get_recent_turns(user_id, limit=20)
+            
+            if not recent_turns:
+                return []
+            
+            # Group by conversation and summarize
+            summaries = []
+            current_summary = []
+            
+            for turn in recent_turns:
+                if turn.get("user_text") and turn.get("assistant_response"):
+                    summary_line = f"User: {turn['user_text'][:100]}... Assistant: {turn['assistant_response'][:100]}..."
+                    current_summary.append(summary_line)
+                    
+                    # Create summary every 5 turns
+                    if len(current_summary) >= 5:
+                        summaries.append("\n".join(current_summary))
+                        current_summary = []
+            
+            # Add remaining turns
+            if current_summary:
+                summaries.append("\n".join(current_summary))
+            
+            return summaries[-3:]  # Return last 3 summaries
+            
+        except Exception as e:
+            logger.warning(f"Could not fetch recent summaries: {e}")
+            return []  # Return empty list if DynamoDB is not available
     
     def _calculate_user_metrics(self, profile: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate derived metrics from profile"""

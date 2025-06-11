@@ -17,9 +17,9 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.services.elasticsearch_service import elasticsearch_service
-from src.utils.logger import setup_logger
+from src.utils.logger import get_logger
 
-logger = setup_logger(__name__)
+logger = get_logger(__name__)
 
 
 class LawyerDataLoader:

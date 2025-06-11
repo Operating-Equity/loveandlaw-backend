@@ -278,7 +278,8 @@ class TherapeuticEngine:
                 state["lawyer_cards"] = result.get("lawyer_cards", [])
                 state["match_info"] = {
                     "reason": result.get("match_reason"),
-                    "total_matches": result.get("total_matches", 0)
+                    "total_matches": result.get("total_matches", 0),
+                    "needed_info": result.get("needed_info", [])
                 }
             elif "progress_info" in result:
                 state["progress_info"] = result.get("progress_info")
@@ -357,34 +358,44 @@ class TherapeuticEngine:
         turn_data["assistant_response"] = state.get("assistant_response", "")
         turn_data["created_at"] = datetime.utcnow().isoformat()
         
-        # Save turn state
-        await dynamodb_service.save_turn_state(turn_data)
+        # Save turn state (optional - continue if fails)
+        try:
+            await dynamodb_service.save_turn_state(turn_data)
+        except Exception as e:
+            logger.warning(f"Could not save turn state to DynamoDB: {e}. Continuing without persistence.")
         
-        # Update user profile metrics
-        await self._update_user_profile(state)
+        # Update user profile metrics (optional - continue if fails)
+        try:
+            await self._update_user_profile(state)
+        except Exception as e:
+            logger.warning(f"Could not update user profile: {e}. Continuing without persistence.")
         
         return state
     
     def _should_match_lawyers(self, state: Dict[str, Any]) -> bool:
-        """Determine if lawyer matching should run"""
+        """Determine if lawyer matching should run - always try to gather info"""
         turn_state = state["turn_state"]
         
         # Skip if in crisis
         if turn_state.get("distress_score", 0) >= 7:
             return False
         
-        # Skip if no location info
-        if not turn_state.get("facts", {}).get("zip"):
-            return False
-        
-        # Match if legal intent identified
-        if turn_state.get("legal_intent"):
-            return True
-        
-        # Match if explicitly requested
+        # Always run matcher if user mentions lawyer/attorney
+        # The matcher will determine if we have enough info
         user_text = turn_state["user_text"].lower()
-        match_keywords = ["lawyer", "attorney", "legal help", "representation"]
-        return any(keyword in user_text for keyword in match_keywords)
+        match_keywords = ["lawyer", "attorney", "legal help", "representation", "find", "need help"]
+        
+        # Check if legal intent exists or keywords mentioned
+        has_legal_intent = bool(turn_state.get("legal_intent"))
+        has_match_keywords = any(keyword in user_text for keyword in match_keywords)
+        
+        # Check if this is at least the second turn (give time to gather info)
+        turn_count = state.get("context", {}).get("turn_count", 0)
+        
+        # Run matcher if:
+        # 1. User explicitly asks for lawyer OR
+        # 2. We have legal intent AND it's not the first turn
+        return has_match_keywords or (has_legal_intent and turn_count > 0)
     
     
     async def _update_user_profile(self, state: Dict[str, Any]) -> None:
