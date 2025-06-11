@@ -17,17 +17,22 @@ The Love & Law backend provides:
 - **REST API** for lawyer search, profile management, and file uploads
 
 Base URLs:
-- Development: `http://localhost:8000`
-- Production: `https://api.loveandlaw.com` (configure as needed)
+- Local Development: `http://localhost:8000`
+- Production REST API: `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production`
+- Production WebSocket: `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production`
+
+**Note**: The production URLs are AWS API Gateway endpoints that route to the ECS backend service. These use HTTPS/WSS for secure connections.
 
 ## WebSocket API
 
 ### Connection
 
 ```javascript
-// Connect to WebSocket
+// Local Development
 const ws = new WebSocket('ws://localhost:8000/ws');
-// Production: wss://api.loveandlaw.com/ws
+
+// Production (use this for deployed frontend)
+const ws = new WebSocket('wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production');
 ```
 
 ### Message Flow
@@ -419,7 +424,12 @@ Response:
 
 ```javascript
 // 1. Connect and authenticate
-const ws = new WebSocket('ws://localhost:8000/ws');
+// For production, use the AWS API Gateway WebSocket endpoint
+const wsUrl = process.env.NODE_ENV === 'production' 
+  ? 'wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production'
+  : 'ws://localhost:8000/ws';
+
+const ws = new WebSocket(wsUrl);
 const userId = 'user-123';
 const conversationId = 'conv-456';
 
@@ -502,9 +512,14 @@ function displayLawyerCards(cards) {
 ### REST API Example
 
 ```javascript
+// Set base URL based on environment
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production'
+  : 'http://localhost:8000';
+
 // Search for lawyers
 async function searchLawyers() {
-  const response = await fetch('/api/v1/match', {
+  const response = await fetch(`${API_BASE_URL}/api/v1/match`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${authToken}`,
@@ -524,6 +539,23 @@ async function searchLawyers() {
   const data = await response.json();
   return data.cards;
 }
+
+// Get user profile
+async function getUserProfile(userId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/profile/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${authToken}`
+    }
+  });
+  
+  return response.json();
+}
+
+// Health check
+async function checkHealth() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/health`);
+  return response.json();
+}
 ```
 
 ## Important Notes
@@ -538,9 +570,31 @@ async function searchLawyers() {
 
 5. **Rate Limiting**: WebSocket connections are limited to prevent abuse. Implement exponential backoff for reconnections.
 
+## Production Configuration
+
+### Environment Variables for Frontend
+```javascript
+// .env.production
+REACT_APP_API_BASE_URL=https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production
+REACT_APP_WS_URL=wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production
+
+// .env.development
+REACT_APP_API_BASE_URL=http://localhost:8000
+REACT_APP_WS_URL=ws://localhost:8000/ws
+```
+
+### CORS Configuration
+The production backend is configured to accept requests from your frontend domain. Make sure your frontend domain is whitelisted in the backend CORS settings.
+
+### SSL/TLS
+All production connections use SSL/TLS encryption:
+- REST API: HTTPS
+- WebSocket: WSS (WebSocket Secure)
+
 ## Support
 
 For questions or issues:
 - GitHub Issues: https://github.com/loveandlaw/backend/issues
 - Technical Documentation: See ARCHITECTURE.md
 - API Updates: Check CHANGELOG.md
+- Deployment Guide: See DEPLOYMENT_GUIDE.md
