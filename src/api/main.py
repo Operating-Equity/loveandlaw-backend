@@ -390,10 +390,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     "message": "Invalid JSON format"
                 })
             except Exception as e:
-                logger.error(f"WebSocket error: {e}")
+                logger.error(f"WebSocket error: {e}", exc_info=True)
+                error_msg = str(e) if settings.debug else "Error processing message"
                 await websocket.send_json({
                     "type": "error",
-                    "message": "Error processing message"
+                    "message": error_msg
                 })
                 
     except Exception as e:
@@ -443,6 +444,10 @@ async def stream_response(websocket: WebSocket, cid: str, result: Dict[str, Any]
     })
     
     # Send lawyer cards if available
+    logger.info(f"Lawyer cards check: has_cards={bool(result.get('lawyer_cards'))}, "
+                f"distress_score={result['metrics']['distress_score']}, "
+                f"num_cards={len(result.get('lawyer_cards', []))}")
+    
     if result.get("lawyer_cards") and result["metrics"]["distress_score"] < 7:
         await websocket.send_json({
             "type": "cards",
@@ -469,10 +474,17 @@ async def stream_response(websocket: WebSocket, cid: str, result: Dict[str, Any]
     
     # Send metrics (for debugging/monitoring)
     if settings.debug:
+        metrics = result["metrics"].copy()
+        # Add legal routing info
+        if result.get("legal_intent"):
+            metrics["legal_intent"] = result["legal_intent"]
+        if result.get("active_legal_specialist"):
+            metrics["active_legal_specialist"] = result["active_legal_specialist"]
+            
         await websocket.send_json({
             "type": "metrics",
             "cid": cid,
-            "metrics": result["metrics"]
+            "metrics": metrics
         })
 
 

@@ -200,152 +200,8 @@ class DynamoDBService:
             await self.session.__aexit__(None, None, None)
 
 
-class ElasticsearchService:
-    def __init__(self):
-        self.client = None
-        self.index_name = "lawyers_v1"
-    
-    async def initialize(self):
-        """Initialize Elasticsearch connection"""
-        try:
-            # Configure connection based on whether API key is provided
-            if settings.elasticsearch_api_key:
-                # Use API key authentication for Elastic Cloud
-                self.client = AsyncElasticsearch(
-                    [settings.elasticsearch_url],
-                    api_key=settings.elasticsearch_api_key,
-                    verify_certs=True
-                )
-            else:
-                # Basic connection for local development
-                self.client = AsyncElasticsearch([settings.elasticsearch_url])
-            
-            # Test connection
-            info = await self.client.info()
-            logger.info(f"Connected to Elasticsearch cluster: {info['cluster_name']}")
-            
-            # Create index if it doesn't exist
-            if not await self.client.indices.exists(index=self.index_name):
-                await self._create_lawyer_index()
-            
-            logger.info("Elasticsearch initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Elasticsearch: {e}")
-            raise
-    
-    async def _create_lawyer_index(self):
-        """Create lawyers index with proper mapping"""
-        mapping = {
-            "mappings": {
-                "properties": {
-                    "id": {"type": "keyword"},
-                    "name": {"type": "text"},
-                    "firm": {"type": "text"},
-                    "practice_areas": {"type": "keyword"},
-                    "location": {
-                        "properties": {
-                            "zip": {"type": "keyword"},
-                            "city": {"type": "text"},
-                            "state": {"type": "keyword"},
-                            "coordinates": {"type": "geo_point"}
-                        }
-                    },
-                    "description": {"type": "text"},
-                    "budget_range": {"type": "keyword"},
-                    "rating": {"type": "float"},
-                    "reviews_count": {"type": "integer"},
-                    "embedding": {"type": "dense_vector", "dims": 1536}  # For text embeddings
-                }
-            }
-        }
-        
-        await self.client.indices.create(index=self.index_name, body=mapping)
-        logger.info(f"Created {self.index_name} index")
-    
-    async def search_lawyers(self, query: Dict[str, Any], size: int = 5) -> List[Dict[str, Any]]:
-        """Search for lawyers based on criteria"""
-        try:
-            # Build search query
-            search_body = {
-                "size": size,
-                "query": {
-                    "bool": {
-                        "must": [],
-                        "should": [],
-                        "filter": []
-                    }
-                }
-            }
-            
-            # Add filters based on query
-            if "zip" in query:
-                search_body["query"]["bool"]["filter"].append({
-                    "term": {"location.zip": query["zip"]}
-                })
-            
-            if "practice_areas" in query:
-                search_body["query"]["bool"]["filter"].append({
-                    "terms": {"practice_areas": query["practice_areas"]}
-                })
-            
-            if "budget_range" in query:
-                search_body["query"]["bool"]["filter"].append({
-                    "term": {"budget_range": query["budget_range"]}
-                })
-            
-            # Text search
-            if "text" in query:
-                search_body["query"]["bool"]["must"].append({
-                    "multi_match": {
-                        "query": query["text"],
-                        "fields": ["name^2", "firm", "description", "practice_areas"]
-                    }
-                })
-            
-            # Vector search (if embedding provided)
-            if "embedding" in query:
-                search_body["query"]["bool"]["should"].append({
-                    "script_score": {
-                        "query": {"match_all": {}},
-                        "script": {
-                            "source": "cosineSimilarity(params.query_vector, 'embedding') + 1.0",
-                            "params": {"query_vector": query["embedding"]}
-                        }
-                    }
-                })
-            
-            response = await self.client.search(index=self.index_name, body=search_body)
-            
-            lawyers = []
-            for hit in response["hits"]["hits"]:
-                lawyer = hit["_source"]
-                lawyer["match_score"] = hit["_score"] / (hit["_score"] + 1)  # Normalize score
-                lawyers.append(lawyer)
-            
-            return lawyers
-        except Exception as e:
-            logger.error(f"Failed to search lawyers: {e}")
-            return []
-    
-    async def index_lawyer(self, lawyer: Dict[str, Any]):
-        """Index a lawyer document"""
-        try:
-            await self.client.index(
-                index=self.index_name,
-                id=lawyer["id"],
-                body=lawyer
-            )
-            logger.info(f"Indexed lawyer: {lawyer['id']}")
-        except Exception as e:
-            logger.error(f"Failed to index lawyer: {e}")
-            raise
-    
-    async def close(self):
-        """Close Elasticsearch connection"""
-        if self.client:
-            await self.client.close()
-
-
+# Import ElasticsearchService from the dedicated module
+# (Removed duplicate class definition)
 class RedisService:
     def __init__(self):
         self.client = None
@@ -394,6 +250,9 @@ class RedisService:
         if self.client:
             await self.client.close()
 
+
+# Import ElasticsearchService from the dedicated module
+from src.services.elasticsearch_service import ElasticsearchService
 
 # Global instances
 dynamodb_service = DynamoDBService()

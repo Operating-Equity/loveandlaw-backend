@@ -186,7 +186,9 @@ class TherapeuticEngine:
                     "reflection_type": result.get("reflection_type"),
                     "reflection_prompts": result.get("reflection_prompts", []),
                     "reflection_insights": result.get("reflection_insights", [])
-                }
+                },
+                "legal_intent": result["turn_state"].get("legal_intent", []),
+                "active_legal_specialist": result.get("active_legal_specialist")
             }
             
         except Exception as e:
@@ -275,7 +277,9 @@ class TherapeuticEngine:
                 state["legal_research"] = result.get("legal_research")
                 state["research_sources"] = result.get("research_sources", [])
             elif "lawyer_cards" in result:
-                state["lawyer_cards"] = result.get("lawyer_cards", [])
+                lawyer_cards = result.get("lawyer_cards", [])
+                logger.info(f"Matcher returned {len(lawyer_cards)} lawyer cards")
+                state["lawyer_cards"] = lawyer_cards
                 state["match_info"] = {
                     "reason": result.get("match_reason"),
                     "total_matches": result.get("total_matches", 0),
@@ -343,11 +347,27 @@ class TherapeuticEngine:
         }
         
         # Get final response
-        advisor_result = await self.agents["advisor"].process(turn_state, advisor_context)
-        
-        state["assistant_response"] = advisor_result["assistant_response"]
-        state["suggestions"] = advisor_result.get("suggestions", [])
-        state["show_cards"] = advisor_result.get("show_cards", False)
+        try:
+            advisor_result = await self.agents["advisor"].process(turn_state, advisor_context)
+            
+            # Validate advisor result
+            if not advisor_result or not isinstance(advisor_result, dict):
+                logger.error("Advisor returned invalid result")
+                advisor_result = {
+                    "assistant_response": "I understand you're going through a difficult time. Could you tell me more about your situation?",
+                    "suggestions": [],
+                    "show_cards": False
+                }
+            
+            state["assistant_response"] = advisor_result.get("assistant_response", "I'm here to help. Could you share more about what's happening?")
+            state["suggestions"] = advisor_result.get("suggestions", [])
+            state["show_cards"] = advisor_result.get("show_cards", False)
+            
+        except Exception as e:
+            logger.error(f"Error in advisor composition: {e}", exc_info=True)
+            state["assistant_response"] = "I understand this is challenging. Let me help you through this. What specific aspect would you like to focus on first?"
+            state["suggestions"] = []
+            state["show_cards"] = False
         
         return state
     
@@ -378,12 +398,13 @@ class TherapeuticEngine:
         
         # Skip if in crisis
         if turn_state.get("distress_score", 0) >= 7:
+            logger.info(f"Skipping lawyer match due to high distress: {turn_state.get('distress_score', 0)}")
             return False
         
         # Always run matcher if user mentions lawyer/attorney
         # The matcher will determine if we have enough info
         user_text = turn_state["user_text"].lower()
-        match_keywords = ["lawyer", "attorney", "legal help", "representation", "find", "need help"]
+        match_keywords = ["lawyer", "attorney", "legal help", "representation", "find", "need help", "divorce", "custody", "support"]
         
         # Check if legal intent exists or keywords mentioned
         has_legal_intent = bool(turn_state.get("legal_intent"))
@@ -395,7 +416,9 @@ class TherapeuticEngine:
         # Run matcher if:
         # 1. User explicitly asks for lawyer OR
         # 2. We have legal intent AND it's not the first turn
-        return has_match_keywords or (has_legal_intent and turn_count > 0)
+        should_match = has_match_keywords or (has_legal_intent and turn_count > 0)
+        logger.info(f"Should match lawyers: {should_match} (keywords={has_match_keywords}, intent={has_legal_intent}, turn={turn_count})")
+        return should_match
     
     
     async def _update_user_profile(self, state: Dict[str, Any]) -> None:

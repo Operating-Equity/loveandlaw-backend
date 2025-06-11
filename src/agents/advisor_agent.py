@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional
+import asyncio
 from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState, LawyerCard
@@ -141,14 +142,17 @@ Craft a response following the adaptive empathy rules and structure above.
 - Don't mention lawyers yet if we're still gathering information"""
 
         try:
-            response = await self.groq_client.chat.completions.create(
-                model=settings.advisor_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=300
+            response = await asyncio.wait_for(
+                self.groq_client.chat.completions.create(
+                    model=settings.advisor_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=300
+                ),
+                timeout=10.0  # 10 second timeout
             )
             
             final_response = response.choices[0].message.content.strip()
@@ -176,6 +180,10 @@ Craft a response following the adaptive empathy rules and structure above.
                 final_response += f"\n\nI've found {len(lawyer_cards)} lawyers who might be a good match for your situation. Would you like to see their profiles?"
             
             return final_response
+            
+        except asyncio.TimeoutError:
+            logger.error("Advisor response timed out after 10 seconds")
+            return listener_draft + "\n\nHow would you like me to help you with this?"
             
         except Exception as e:
             logger.error(f"Error composing adaptive response: {e}")

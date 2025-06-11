@@ -72,6 +72,55 @@ Enhanced: [specific emotion]"""
                 elif line.startswith("Enhanced:"):
                     enhanced = line.split(":")[1].strip()
             
+            # Validate enhanced sentiment
+            valid_emotions = [
+                "admiration", "amusement", "anger", "annoyance", "approval", "caring",
+                "confusion", "curiosity", "desire", "disappointment", "disapproval",
+                "disgust", "embarrassment", "excitement", "fear", "gratitude", "grief",
+                "joy", "love", "nervousness", "optimism", "pride", "realization",
+                "relief", "remorse", "sadness", "surprise", "neutral"
+            ]
+            
+            # Clean up the enhanced sentiment
+            enhanced = enhanced.lower().strip()
+            
+            # If the emotion contains extra text, try to extract the valid emotion
+            if enhanced not in valid_emotions:
+                # Try to find a valid emotion in the response
+                for emotion in valid_emotions:
+                    if emotion in enhanced:
+                        enhanced = emotion
+                        break
+                else:
+                    # Map common variations
+                    emotion_map = {
+                        "worry": "nervousness",
+                        "worried": "nervousness", 
+                        "concern": "nervousness",
+                        "concerned": "nervousness",
+                        "frustration": "annoyance",
+                        "frustrated": "annoyance",
+                        "sympathy": "caring",
+                        "empathy": "caring",
+                        "regret": "remorse",
+                        "confidence": "optimism",
+                        "confident": "optimism",
+                        "anxious": "nervousness",
+                        "anxiety": "nervousness",
+                        "stress": "nervousness",
+                        "stressed": "nervousness"
+                    }
+                    
+                    # Check if any mapped emotion is in the response
+                    for key, value in emotion_map.items():
+                        if key in enhanced:
+                            enhanced = value
+                            break
+                    else:
+                        # Default to neutral if we can't map it
+                        logger.warning(f"Unknown emotion '{enhanced}', defaulting to neutral")
+                        enhanced = "neutral"
+            
             return basic, enhanced
             
         except Exception as e:

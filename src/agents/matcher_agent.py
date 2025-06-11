@@ -4,6 +4,7 @@ from datetime import datetime
 import numpy as np
 from groq import AsyncGroq
 from src.agents.base import BaseAgent
+from src.agents.enhanced_matcher import EnhancedMatcherAgent, InformationCompleteness
 from src.models.conversation import TurnState, LawyerCard
 from src.services.database import elasticsearch_service, redis_service
 from src.config.settings import settings
@@ -20,21 +21,38 @@ class MatcherAgent(BaseAgent):
         super().__init__("matcher")
         self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
         self.cache_ttl = 3600  # 1 hour for lawyer matches
+        self.enhanced_matcher = EnhancedMatcherAgent()
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Match lawyers based on user needs"""
+        """Match lawyers based on user needs with enhanced algorithm"""
+        
+        # Use enhanced matcher for intelligent matching
+        enhanced_state = await self.enhanced_matcher.process(state)
+        
+        # If enhanced matcher found matches, return them
+        if enhanced_state.lawyer_matches:
+            return {
+                "lawyer_cards": enhanced_state.lawyer_matches,
+                "match_reason": "enhanced_matching",
+                "completeness_score": enhanced_state.metrics.get("completeness_score", 0),
+                "suggestions": enhanced_state.suggestions
+            }
+        
+        # If enhanced matcher needs more info, use suggestions
+        if enhanced_state.metrics.get("needs_more_info"):
+            return {
+                "lawyer_cards": [],
+                "match_reason": "need_more_info",
+                "suggestions": enhanced_state.suggestions,
+                "completeness_score": enhanced_state.metrics.get("completeness_score", 0)
+            }
+        
+        # Fallback to original matching logic if enhanced fails
+        logger.info("Falling back to standard matching")
         
         # Skip if distress too high
         if state.distress_score > 6:
             return {"lawyer_cards": [], "match_reason": "distress_too_high"}
-        
-        # Check if we have enough information
-        if not self._has_sufficient_info(state):
-            return {
-                "lawyer_cards": [],
-                "match_reason": "insufficient_info",
-                "needed_info": self._get_missing_info(state)
-            }
         
         # Build search context from conversation
         search_context = self._build_search_context(state, context)

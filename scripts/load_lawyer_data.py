@@ -25,8 +25,12 @@ logger = get_logger(__name__)
 class LawyerDataLoader:
     """Loads and transforms lawyer data from CSV files into Elasticsearch."""
 
-    def __init__(self, data_dir: str = "./.data"):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir: str = None):
+        if data_dir is None:
+            # Use absolute path to ensure we find the data directory
+            self.data_dir = Path(__file__).parent.parent / ".data"
+        else:
+            self.data_dir = Path(data_dir)
         self.merged_lawyers = {}
         self.normalized_mapping = {}
         self.locations = {}
@@ -43,6 +47,10 @@ class LawyerDataLoader:
 
             # Load data files in order
             logger.info("Loading CSV files...")
+            logger.info(f"Data directory: {self.data_dir}")
+            logger.info(f"Data directory exists: {self.data_dir.exists()}")
+            if self.data_dir.exists():
+                logger.info(f"Files in data directory: {list(self.data_dir.glob('*.csv'))[:5]}")
             self._load_scorecard_weights()
             self._load_normalized_mapping()
             self._load_merged_lawyers()
@@ -467,7 +475,7 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Load lawyer data into Elasticsearch')
-    parser.add_argument('--data-dir', default='./data', help='Directory containing CSV files')
+    parser.add_argument('--data-dir', default='.data', help='Directory containing CSV files')
     parser.add_argument('--clear-index', action='store_true', help='Clear existing index before loading')
 
     args = parser.parse_args()

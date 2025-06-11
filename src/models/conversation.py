@@ -31,6 +31,12 @@ class TurnState(BaseModel):
     memory_short: Optional[str] = None
     memory_long: Optional[str] = None
     
+    # Additional fields for processing
+    errors: List[str] = Field(default_factory=list)
+    lawyer_matches: List[Dict[str, Any]] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
