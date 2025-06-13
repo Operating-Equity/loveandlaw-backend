@@ -17,3 +17,8 @@ groq_api_key          = "your-groq-api-key-here"
 anthropic_api_key     = "your-anthropic-api-key-here"
 jwt_secret_key        = "your-jwt-secret-key-here"
 elasticsearch_api_key = "your-elasticsearch-api-key-here"
+
+# Clerk Configuration
+clerk_publishable_key = "your-clerk-publishable-key-here"
+clerk_secret_key      = "your-clerk-secret-key-here"
+clerk_frontend_api    = "your-app.clerk.accounts.dev"

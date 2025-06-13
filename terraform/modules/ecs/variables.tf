@@ -72,3 +72,13 @@ variable "elasticsearch_endpoint" {
   description = "Elasticsearch endpoint"
   type        = string
 }
+
+variable "clerk_publishable_key" {
+  description = "Clerk publishable key"
+  type        = string
+}
+
+variable "clerk_frontend_api" {
+  description = "Clerk frontend API domain"
+  type        = string
+}

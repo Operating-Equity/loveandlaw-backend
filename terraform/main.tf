@@ -51,6 +51,7 @@ resource "aws_secretsmanager_secret_version" "api_keys" {
     ANTHROPIC_API_KEY = var.anthropic_api_key
     JWT_SECRET_KEY    = var.jwt_secret_key
     ELASTICSEARCH_API_KEY = var.elasticsearch_api_key
+    CLERK_SECRET_KEY  = var.clerk_secret_key
   })
 }
 
@@ -77,6 +78,10 @@ module "ecs" {
   redis_endpoint  = module.database.redis_endpoint
   redis_auth_secret_arn = module.database.redis_auth_secret_arn
   elasticsearch_endpoint = var.elasticsearch_endpoint # Using existing Elastic Cloud
+  
+  # Clerk configuration
+  clerk_publishable_key = var.clerk_publishable_key
+  clerk_frontend_api    = var.clerk_frontend_api
 }
 
 # API Gateway

@@ -288,14 +288,18 @@ resource "aws_ecs_task_definition" "main" {
       { name = "ELASTICSEARCH_URL", value = var.elasticsearch_endpoint },
       { name = "REDIS_URL", value = "rediss://:${random_password.redis_auth.result}@${var.redis_endpoint}:6379" },
       { name = "DYNAMODB_CONVERSATIONS_TABLE", value = var.dynamodb_tables.conversations },
-      { name = "DYNAMODB_PROFILES_TABLE", value = var.dynamodb_tables.profiles }
+      { name = "DYNAMODB_PROFILES_TABLE", value = var.dynamodb_tables.profiles },
+      { name = "USE_CLERK_AUTH", value = "True" },
+      { name = "CLERK_PUBLISHABLE_KEY", value = var.clerk_publishable_key },
+      { name = "CLERK_FRONTEND_API", value = var.clerk_frontend_api }
     ]
 
     secrets = [
       { name = "GROQ_API_KEY", valueFrom = "${var.secrets_arn}:GROQ_API_KEY::" },
       { name = "ANTHROPIC_API_KEY", valueFrom = "${var.secrets_arn}:ANTHROPIC_API_KEY::" },
       { name = "JWT_SECRET_KEY", valueFrom = "${var.secrets_arn}:JWT_SECRET_KEY::" },
-      { name = "ELASTICSEARCH_API_KEY", valueFrom = "${var.secrets_arn}:ELASTICSEARCH_API_KEY::" }
+      { name = "ELASTICSEARCH_API_KEY", valueFrom = "${var.secrets_arn}:ELASTICSEARCH_API_KEY::" },
+      { name = "CLERK_SECRET_KEY", valueFrom = "${var.secrets_arn}:CLERK_SECRET_KEY::" }
     ]
 
     logConfiguration = {

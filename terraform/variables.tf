@@ -76,6 +76,22 @@ variable "elasticsearch_api_key" {
   sensitive   = true
 }
 
+variable "clerk_publishable_key" {
+  description = "Clerk publishable key"
+  type        = string
+}
+
+variable "clerk_secret_key" {
+  description = "Clerk secret key"
+  type        = string
+  sensitive   = true
+}
+
+variable "clerk_frontend_api" {
+  description = "Clerk frontend API domain"
+  type        = string
+}
+
 variable "alert_email" {
   description = "Email address for CloudWatch alerts"
   type        = string
