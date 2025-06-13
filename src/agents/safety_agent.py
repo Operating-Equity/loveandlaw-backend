@@ -1,10 +1,10 @@
 from typing import Dict, Any, List
 import re
-from groq import AsyncGroq
 from src.agents.base import BaseAgent
 from src.models.conversation import TurnState
 from src.config.settings import settings
 from src.utils.logger import get_logger
+from src.utils.groq_client import get_groq_client
 
 logger = get_logger(__name__)
 
@@ -14,7 +14,7 @@ class SafetyAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("safety")
-        self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
+        self.groq_client = get_groq_client()
         
         # Crisis keywords and patterns
         self.crisis_keywords = [
