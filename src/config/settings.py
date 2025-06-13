@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
     jwt_expiration_minutes: int = Field(default=1440, env="JWT_EXPIRATION_MINUTES")
     
+    # Clerk Configuration
+    clerk_publishable_key: Optional[str] = Field(None, env="CLERK_PUBLISHABLE_KEY")
+    clerk_secret_key: Optional[str] = Field(None, env="CLERK_SECRET_KEY")
+    clerk_frontend_api: Optional[str] = Field(None, env="CLERK_FRONTEND_API")
+    use_clerk_auth: bool = Field(default=False, env="USE_CLERK_AUTH")
+    
     # WebSocket Configuration
     ws_heartbeat_interval: int = Field(default=30, env="WS_HEARTBEAT_INTERVAL")
     ws_connection_timeout: int = Field(default=300, env="WS_CONNECTION_TIMEOUT")

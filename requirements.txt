@@ -43,11 +43,13 @@ prometheus-client==0.22.0
 structlog==24.4.0
 sentry-sdk==2.19.0
 
+# HTTP Client
+httpx==0.28.1
+
 # Testing
 pytest==8.3.4
 pytest-asyncio==0.25.2
 pytest-cov==6.0.0
-httpx==0.28.1
 
 # Development
 python-dotenv==1.0.1

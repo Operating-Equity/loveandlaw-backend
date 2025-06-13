@@ -12,6 +12,18 @@ logger = get_logger(__name__)
 # Security scheme
 security = HTTPBearer(auto_error=False)
 
+# Lazy load Clerk auth if enabled
+_clerk_auth = None
+
+def get_clerk_auth():
+    global _clerk_auth
+    if settings.use_clerk_auth and settings.clerk_publishable_key:
+        if _clerk_auth is None:
+            from src.api.clerk_auth import ClerkAuth
+            _clerk_auth = ClerkAuth(settings.clerk_publishable_key)
+        return _clerk_auth
+    return None
+
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token"""
@@ -73,6 +85,32 @@ async def get_current_user(
     
     token = credentials.credentials
     
+    # Check if we should use Clerk authentication
+    clerk_auth = get_clerk_auth()
+    if clerk_auth:
+        try:
+            # Verify token with Clerk
+            payload = await clerk_auth.verify_token(token)
+            user_data = clerk_auth.extract_user_data(payload)
+            
+            if not user_data.get("user_id"):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication credentials",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            
+            logger.info(f"Clerk auth successful for user: {user_data['user_id']}")
+            return user_data
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Clerk authentication error: {e}")
+            # Fall back to standard JWT if Clerk fails
+            logger.warning("Falling back to standard JWT authentication")
+    
+    # Standard JWT authentication
     try:
         payload = verify_token(token)
         user_id: str = payload.get("sub")
