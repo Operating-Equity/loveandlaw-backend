@@ -156,7 +156,7 @@ class TherapeuticEngine:
         # Configure for this conversation with recursion limit
         config = {
             "configurable": {"thread_id": conversation_id or user_id},
-            "recursion_limit": 50
+            "recursion_limit": 100  # Increased from 50 to handle complex legal flows
         }
         
         try:
