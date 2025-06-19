@@ -244,72 +244,14 @@ class ElasticsearchService:
 
     async def get_lawyer_by_id(self, lawyer_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific lawyer by ID."""
-        # For testing: Return mock data for lawyer123
-        if lawyer_id == "lawyer123":
-            return {
-                "id": "lawyer123",
-                "name": "Sarah Johnson",
-                "firm": "Johnson Family Law",
-                "profile_summary": "A dedicated family law attorney with over 15 years of experience in divorce and child custody cases.",
-                "city": "Philadelphia",
-                "state": "PA",
-                "location": {
-                    "lat": 39.9526,
-                    "lon": -75.1652
-                },
-                "practice_areas": ["Divorce", "Child Custody", "Family Law"],
-                "specialties": [
-                    {
-                        "name": "Collaborative Divorce",
-                        "description": "Non-adversarial approach to divorce"
-                    }
-                ],
-                "education": [
-                    {
-                        "institution": "University of Pennsylvania Law School",
-                        "degree": "J.D.",
-                        "year": 2010
-                    }
-                ],
-                "professional_experience": "Over 15 years specializing in family law with a focus on collaborative divorce solutions.",
-                "years_of_experience": 15,
-                "languages": ["English", "Spanish"],
-                "payment_methods": ["Credit Card", "Cash", "Check"],
-                "ratings": {
-                    "overall": 4.8,
-                    "knowledge": 4.9,
-                    "communication": 4.7,
-                    "value": 4.6
-                },
-                "reviews": [
-                    {
-                        "author": "Anonymous",
-                        "rating": 5,
-                        "text": "Sarah helped me through a difficult divorce with compassion and expertise."
-                    }
-                ],
-                "phone_numbers": ["(215) 555-0123"],
-                "email": "sarah@johnsonlaw.com",
-                "website": "https://johnsonlaw.com",
-                "awards": ["Super Lawyers Rising Star 2020", "Best Family Lawyers in Philadelphia 2022"],
-                "associations": ["Pennsylvania Bar Association", "Philadelphia Family Law Association"],
-                "fee_structure": {
-                    "free_consultation": True,
-                    "consultation_length": "30 minutes",
-                    "hourly_rate": "$250-$300"
-                },
-                "budget_range": "$$",
-                "active": True
-            }
-        
-        # Normal production path
         try:
             response = await self.client.get(
                 index=self.index_name,
                 id=lawyer_id
             )
             return response["_source"]
-        except:
+        except Exception as e:
+            logger.error(f"Error getting lawyer by ID {lawyer_id}: {e}")
             return None
 
     async def update_lawyer(self, lawyer_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
