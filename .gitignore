@@ -111,3 +111,4 @@ deploy_lambda.sh
 
 # Temporary fix directories
 terraform/fixes/
+**/.claude/settings.local.json

@@ -12,7 +12,7 @@ from datetime import datetime
 
 from src.config.settings import settings
 from src.services.database import initialize_databases, close_databases, elasticsearch_service, dynamodb_service
-from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse
+from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse, LawyerDetailsResponse
 from src.api.auth import get_current_user
 from src.api.websocket_internal import router as websocket_internal_router
 from src.utils.logger import get_logger
@@ -275,6 +275,56 @@ async def get_profile(
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
         raise HTTPException(status_code=500, detail="Error fetching profile")
+
+
+@app.get(f"/api/{settings.api_version}/lawyers/{{lawyer_id}}")
+async def get_lawyer_details(
+    lawyer_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> LawyerDetailsResponse:
+    """Get detailed information about a specific lawyer by ID"""
+    try:
+        # Fetch lawyer data from Elasticsearch
+        lawyer_data = await elasticsearch_service.get_lawyer_by_id(lawyer_id)
+        
+        if not lawyer_data:
+            raise HTTPException(status_code=404, detail="Lawyer not found")
+        
+        # Convert to response model
+        response = LawyerDetailsResponse(
+            id=lawyer_data.get("id"),
+            name=lawyer_data.get("name", ""),
+            firm=lawyer_data.get("firm"),
+            profile_summary=lawyer_data.get("profile_summary"),
+            city=lawyer_data.get("city"),
+            state=lawyer_data.get("state"),
+            location=lawyer_data.get("location"),
+            practice_areas=lawyer_data.get("practice_areas", []),
+            specialties=lawyer_data.get("specialties", []),
+            education=lawyer_data.get("education", []),
+            professional_experience=lawyer_data.get("professional_experience"),
+            years_of_experience=lawyer_data.get("years_of_experience"),
+            languages=lawyer_data.get("languages", []),
+            payment_methods=lawyer_data.get("payment_methods", []),
+            ratings=lawyer_data.get("ratings"),
+            reviews=lawyer_data.get("reviews", []),
+            phone_numbers=lawyer_data.get("phone_numbers", []),
+            email=lawyer_data.get("email"),
+            website=lawyer_data.get("website"),
+            awards=lawyer_data.get("awards", []),
+            associations=lawyer_data.get("associations", []),
+            fee_structure=lawyer_data.get("fee_structure"),
+            budget_range=lawyer_data.get("budget_range"),
+            active=lawyer_data.get("active", True)
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching lawyer details: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching lawyer details")
 
 
 @app.websocket("/ws")

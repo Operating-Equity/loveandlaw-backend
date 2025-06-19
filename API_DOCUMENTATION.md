@@ -35,7 +35,7 @@ Check if the API is operational.
 - `200`: Service is healthy
 - `503`: Service is unhealthy
 
-### Lawyer Match (Coming Soon)
+### Lawyer Match
 
 Find lawyers based on user requirements.
 
@@ -75,6 +75,79 @@ Find lawyers based on user requirements.
   ]
 }
 ```
+
+### Lawyer Details
+
+Get detailed information about a specific lawyer by ID.
+
+**Endpoint**: `GET /v1/lawyers/{lawyer_id}`
+
+**Path Parameters**:
+- `lawyer_id`: The unique identifier of the lawyer
+
+**Response**:
+```json
+{
+  "id": "lawyer123",
+  "name": "Sarah Johnson, Esq.",
+  "firm": "Johnson Family Law",
+  "profile_summary": "A dedicated family law attorney with over 10 years of experience in divorce and child custody cases.",
+  "city": "Philadelphia",
+  "state": "PA",
+  "location": {
+    "lat": 39.9526,
+    "lon": -75.1652
+  },
+  "practice_areas": ["Divorce", "Child Custody", "Mediation"],
+  "specialties": [
+    {
+      "name": "Collaborative Divorce",
+      "description": "Non-adversarial approach to divorce"
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Pennsylvania Law School",
+      "degree": "J.D.",
+      "year": 2010
+    }
+  ],
+  "professional_experience": "Over 10 years specializing in family law with a focus on collaborative divorce solutions.",
+  "years_of_experience": 10,
+  "languages": ["English", "Spanish"],
+  "payment_methods": ["Credit Card", "Cash", "Check"],
+  "ratings": {
+    "overall": 4.8,
+    "knowledge": 4.9,
+    "communication": 4.7,
+    "value": 4.6
+  },
+  "reviews": [
+    {
+      "author": "Anonymous",
+      "rating": 5,
+      "text": "Sarah helped me through a difficult divorce with compassion and expertise."
+    }
+  ],
+  "phone_numbers": ["(215) 555-0123"],
+  "email": "sarah@johnsonlaw.com",
+  "website": "https://johnsonlaw.com",
+  "awards": ["Super Lawyers Rising Star 2020", "Best Family Lawyers in Philadelphia 2022"],
+  "associations": ["Pennsylvania Bar Association", "Philadelphia Family Law Association"],
+  "fee_structure": {
+    "free_consultation": true,
+    "consultation_length": "30 minutes",
+    "hourly_rate": "$250-$300"
+  },
+  "budget_range": "$$",
+  "active": true
+}
+```
+
+**Status Codes**:
+- `200`: Successful operation
+- `404`: Lawyer not found
+- `500`: Server error
 
 ## WebSocket API
 
@@ -264,7 +337,11 @@ For API support, please contact: support@loveandlaw.xyz
 
 ## Changelog
 
+- **v1.0.1** (2025-06-20): API Enhancement
+  - Added GET `/v1/lawyers/{lawyer_id}` endpoint for detailed lawyer information
+  - Improved documentation and examples
+
 - **v1.0.0** (2025-06-10): Initial production release
   - WebSocket therapeutic conversations
-  - Mock lawyer matching
+  - Lawyer matching functionality
   - Contextual suggestions
