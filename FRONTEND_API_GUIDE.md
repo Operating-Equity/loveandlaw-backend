@@ -9,7 +9,8 @@ This guide provides comprehensive documentation for frontend engineers to integr
    - [Health Check](#1-health-check)
    - [Lawyer Endpoints](#2-lawyer-endpoints)
    - [User Profile](#3-user-profile)
-   - [Lawyer CSV Upload](#4-lawyer-csv-upload-admin-only)
+   - [Conversation Management](#4-conversation-management)
+   - [Lawyer CSV Upload](#5-lawyer-csv-upload-admin-only)
 4. [Authentication](#authentication)
 5. [Error Handling](#error-handling)
 6. [Examples](#examples)
@@ -402,6 +403,10 @@ Response:
     "user_id": "user-uuid",
     "created_at": "2025-06-10T12:00:00Z",
     "updated_at": "2025-06-10T13:00:00Z",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "preferred_avatar": "avatar-url-or-id",
+    "saved_lawyers": ["lawyer-123", "lawyer-456"],
     "legal_situation": {
       "type": "divorce",
       "stage": "initial_consultation"
@@ -424,7 +429,193 @@ Response:
 }
 ```
 
-### 4. Lawyer CSV Upload (Admin Only)
+#### PUT `/api/v1/profile/{user_id}`
+Update user profile information.
+
+Headers:
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+Request Body (all fields optional):
+```json
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "preferred_avatar": "avatar-url-or-id",
+  "saved_lawyers": ["lawyer-123", "lawyer-456"],
+  "legal_situation": {
+    "type": "divorce",
+    "stage": "attorney_contacted"
+  },
+  "current_goals": ["understand_process", "file_paperwork"],
+  "preferences": {
+    "communication_style": "formal",
+    "notification_preferences": {
+      "email": true,
+      "sms": false,
+      "in_app": true
+    }
+  }
+}
+```
+
+Response:
+```json
+{
+  "profile": {
+    // Same structure as GET response
+  }
+}
+```
+
+### 4. Conversation Management
+
+#### GET `/api/v1/conversations`
+Get all chat histories for the authenticated user.
+
+Headers:
+```
+Authorization: Bearer <jwt-token>
+```
+
+Query Parameters:
+- `limit` (optional): Number of conversations to return (default: 20)
+- `offset` (optional): Pagination offset (default: 0)
+- `status` (optional): Filter by conversation status (active, archived)
+
+Response:
+```json
+{
+  "conversations": [
+    {
+      "conversation_id": "conv-uuid-1",
+      "user_id": "user-uuid",
+      "created_at": "2025-06-10T12:00:00Z",
+      "updated_at": "2025-06-10T13:00:00Z",
+      "status": "active",
+      "last_message": "I need help with custody arrangements",
+      "summary": "User seeking help with child custody during divorce",
+      "message_count": 15,
+      "average_distress_score": 4.5,
+      "legal_topics": ["divorce", "custody"]
+    },
+    {
+      "conversation_id": "conv-uuid-2",
+      "user_id": "user-uuid",
+      "created_at": "2025-06-09T10:00:00Z",
+      "updated_at": "2025-06-09T11:30:00Z",
+      "status": "archived",
+      "last_message": "Thank you for your help",
+      "summary": "User received lawyer recommendations for divorce case",
+      "message_count": 8,
+      "average_distress_score": 3.2,
+      "legal_topics": ["divorce"]
+    }
+  ],
+  "total": 2,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+#### GET `/api/v1/conversations/{conversation_id}/messages`
+Retrieve all messages for a specific conversation.
+
+Headers:
+```
+Authorization: Bearer <jwt-token>
+```
+
+Query Parameters:
+- `limit` (optional): Number of messages to return (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+- `order` (optional): Sort order - "asc" or "desc" (default: "asc")
+
+Response:
+```json
+{
+  "conversation_id": "conv-uuid",
+  "messages": [
+    {
+      "message_id": "msg-uuid-1",
+      "turn_id": "turn-uuid-1",
+      "timestamp": "2025-06-10T12:00:00Z",
+      "role": "user",
+      "content": "I need help with a divorce in Chicago",
+      "redacted": false
+    },
+    {
+      "message_id": "msg-uuid-2",
+      "turn_id": "turn-uuid-1",
+      "timestamp": "2025-06-10T12:00:05Z",
+      "role": "assistant",
+      "content": "I understand you're going through a difficult time and need help with a divorce in Chicago. I'm here to support you through this process...",
+      "metadata": {
+        "sentiment": "neutral",
+        "distress_score": 4.5,
+        "engagement_level": 7.0,
+        "legal_intent": ["divorce"]
+      }
+    },
+    {
+      "message_id": "msg-uuid-3",
+      "turn_id": "turn-uuid-1",
+      "timestamp": "2025-06-10T12:00:10Z",
+      "role": "system",
+      "content": "lawyer_cards",
+      "cards": [
+        {
+          "id": "lawyer-123",
+          "name": "Jane Doe",
+          "firm": "Doe Law Firm",
+          "match_score": 0.92
+        }
+      ]
+    }
+  ],
+  "total": 15,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+#### POST `/api/v1/conversations`
+Initiate a new conversation.
+
+Headers:
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+Request Body (optional):
+```json
+{
+  "initial_message": "I need help with a family law matter",
+  "metadata": {
+    "source": "website",
+    "referrer": "google"
+  }
+}
+```
+
+Response:
+```json
+{
+  "conversation_id": "conv-uuid-new",
+  "user_id": "user-uuid",
+  "created_at": "2025-06-10T14:00:00Z",
+  "status": "active",
+  "websocket_url": "wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production",
+  "auth_token": "temporary-websocket-token"
+}
+```
+
+Note: After creating a conversation, connect to the WebSocket using the provided URL and authenticate with the conversation_id.
+
+### 5. Lawyer CSV Upload (Admin Only)
 
 #### POST `/api/v1/lawyers/upload`
 Upload lawyers via CSV file.

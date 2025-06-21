@@ -52,6 +52,7 @@
 - [ ] Implement file upload for documents
 - [ ] Create admin dashboard
 - [ ] Add analytics tracking
+- [x] ~~Add PUT endpoint for user profile updates~~ ✅ Completed - PUT /api/v1/profile/{user_id}
 
 
 ### Documentation

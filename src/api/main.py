@@ -12,7 +12,7 @@ from datetime import datetime
 
 from src.config.settings import settings
 from src.services.database import initialize_databases, close_databases, elasticsearch_service, dynamodb_service
-from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse, LawyerDetailsResponse
+from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse, ProfileUpdateRequest, LawyerDetailsResponse
 from src.api.auth import get_current_user
 from src.api.websocket_internal import router as websocket_internal_router
 from src.utils.logger import get_logger
@@ -260,6 +260,10 @@ async def get_profile(
             "user_id": profile["user_id"],
             "created_at": profile["created_at"],
             "updated_at": profile["updated_at"],
+            "name": profile.get("name"),
+            "email": profile.get("email"),
+            "preferred_avatar": profile.get("preferred_avatar"),
+            "saved_lawyers": profile.get("saved_lawyers", []),
             "legal_situation": profile.get("legal_situation", {}),
             "milestones_completed": profile.get("milestones_completed", []),
             "current_goals": profile.get("current_goals", []),
@@ -275,6 +279,69 @@ async def get_profile(
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
         raise HTTPException(status_code=500, detail="Error fetching profile")
+
+
+@app.put(f"/api/{settings.api_version}/profile/{{user_id}}")
+async def update_profile(
+    user_id: str,
+    profile_update: ProfileUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ProfileResponse:
+    """Update user profile"""
+    
+    # Check authorization
+    if current_user["user_id"] != user_id and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    try:
+        # Get existing profile first
+        existing_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not existing_profile:
+            # Create new profile if it doesn't exist
+            existing_profile = {
+                "user_id": user_id,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        
+        # Prepare updates (only include non-None values)
+        updates = {k: v for k, v in profile_update.dict().items() if v is not None}
+        updates["user_id"] = user_id  # Ensure user_id is set
+        
+        # Update the profile
+        await dynamodb_service.update_user_profile(user_id, updates)
+        
+        # Fetch the updated profile
+        updated_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not updated_profile:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated profile")
+        
+        # Sanitize sensitive data
+        sanitized_profile = {
+            "user_id": updated_profile["user_id"],
+            "created_at": updated_profile["created_at"],
+            "updated_at": updated_profile["updated_at"],
+            "name": updated_profile.get("name"),
+            "email": updated_profile.get("email"),
+            "preferred_avatar": updated_profile.get("preferred_avatar"),
+            "saved_lawyers": updated_profile.get("saved_lawyers", []),
+            "legal_situation": updated_profile.get("legal_situation", {}),
+            "milestones_completed": updated_profile.get("milestones_completed", []),
+            "current_goals": updated_profile.get("current_goals", []),
+            "preferences": updated_profile.get("preferences", {}),
+            "average_distress_score": updated_profile.get("average_distress_score", 5.0),
+            "average_engagement_level": updated_profile.get("average_engagement_level", 5.0)
+        }
+        
+        return ProfileResponse(profile=sanitized_profile)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        raise HTTPException(status_code=500, detail="Error updating profile")
 
 
 @app.get(f"/api/{settings.api_version}/lawyers/{{lawyer_id}}")

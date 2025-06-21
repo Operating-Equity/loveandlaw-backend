@@ -28,6 +28,11 @@ class UserProfile(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
+    # User information
+    name: Optional[str] = None
+    email: Optional[str] = None
+    preferred_avatar: Optional[str] = None  # Avatar URL or identifier
+    
     # Demographics (optional, privacy-conscious)
     location: Optional[Dict[str, str]] = None  # {zip, state, country}
     
@@ -57,6 +62,7 @@ class UserProfile(BaseModel):
     # Matched lawyers history
     lawyers_viewed: List[str] = Field(default_factory=list)
     lawyers_contacted: List[str] = Field(default_factory=list)
+    saved_lawyers: List[str] = Field(default_factory=list)  # Saved/favorited lawyers
     
     # Safety flags
     crisis_interventions: List[Dict[str, Any]] = Field(default_factory=list)

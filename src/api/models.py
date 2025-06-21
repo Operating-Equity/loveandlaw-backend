@@ -23,6 +23,17 @@ class ProfileResponse(BaseModel):
     profile: Dict[str, Any]
 
 
+class ProfileUpdateRequest(BaseModel):
+    """Request model for updating user profile"""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    preferred_avatar: Optional[str] = None
+    saved_lawyers: Optional[List[str]] = None
+    legal_situation: Optional[Dict[str, Any]] = None
+    current_goals: Optional[List[str]] = None
+    preferences: Optional[Dict[str, Any]] = None
+
+
 class LawyerDetailsResponse(BaseModel):
     """Response model for lawyer details"""
     id: str

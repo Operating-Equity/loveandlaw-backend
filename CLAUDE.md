@@ -201,7 +201,7 @@ Edge cases (safety\_hold, clarify, timeout) follow same handshake minus certain 
 | `POST /v1/match`          | `{facts:{zip, practice_area, …}}` | `{cards:[…]}`   |
 | `POST /v1/lawyers/upload` | multipart/form‑data (CSV)         | `202 accepted`  |
 | `GET  /v1/profile/:id`    | —                                 | `{profile:{…}}` |
-
+| `PUT  /v1/profile/:id`    | `{name, email, preferences, …}`   | `{profile:{…}}` |
 ---
 
 ## 8 · Observability & Continuous Learning
