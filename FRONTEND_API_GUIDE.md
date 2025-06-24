@@ -61,12 +61,12 @@ The Love & Law backend provides:
      development: {
        apiBase: 'http://localhost:8000',
        wsBase: 'ws://localhost:8000/ws',
-       authRequired: false  // Auth bypassed in dev
+       authRequired: false
      },
      production: {
        apiBase: 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production',
        wsBase: 'wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production',
-       authRequired: true
+       authRequired: false  // TEMPORARY: Auth disabled
      }
    };
    
@@ -75,74 +75,28 @@ The Love & Law backend provides:
 
 ### Production Environment
 
-Production requires proper JWT authentication for most endpoints. See [Authentication](#authentication) section.
+Production currently has authentication disabled for ease of development.
 
 ## Authentication
 
-### Development Mode
-- Authentication is **bypassed** when `DEBUG=true` and `ENVIRONMENT=development`
-- Default user: `dev_user_123` with admin role
-- No JWT token required
+### Current Status: Authentication Disabled 🔓
 
-### Production Mode
-- All endpoints except health checks require JWT authentication
-- Tokens must be included in the `Authorization` header: `Bearer <token>`
-- JWT secrets are stored in AWS Secrets Manager
+**TEMPORARY**: Authentication is currently disabled for all environments to simplify integration during development. All API endpoints are accessible without authentication tokens.
 
-### JWT Token Structure
-```javascript
-{
-  "sub": "user-id",        // User ID
-  "role": "user",          // Role: "user" or "admin"
-  "scopes": ["read", "write"],  // Permissions
-  "exp": 1234567890        // Expiration timestamp
-}
-```
+- All users automatically receive admin privileges
+- No JWT tokens required
+- No login/registration needed
+- Each request gets a unique temporary user ID
 
-### Getting Authentication Token
+### Future Authentication (Coming Soon)
 
-#### Option 1: User Registration/Login (Future Implementation)
-```javascript
-// POST /api/v1/auth/register
-const registerResponse = await fetch(`${API_BASE}/api/v1/auth/register`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'secure-password',
-    name: 'John Doe'
-  })
-});
+When authentication is re-enabled, the system will support:
+- JWT-based authentication
+- User registration and login
+- Role-based access control (user/admin)
+- Secure token management
 
-// POST /api/v1/auth/login
-const loginResponse = await fetch(`${API_BASE}/api/v1/auth/login`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'secure-password'
-  })
-});
-
-const { access_token } = await loginResponse.json();
-```
-
-#### Option 2: Generate Test Token (Development Only)
-```javascript
-// For testing in development
-import jwt from 'jsonwebtoken';
-
-const testToken = jwt.sign(
-  {
-    sub: 'test-user-123',
-    role: 'user',
-    scopes: ['read', 'write'],
-    exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-  },
-  'development_jwt_secret_key_12345', // From .env
-  { algorithm: 'HS256' }
-);
-```
+For now, you can make API calls without any authentication headers.
 
 ## WebSocket API
 
@@ -164,14 +118,8 @@ class LoveAndLawWebSocket {
       console.log('WebSocket connected');
       this.reconnectAttempts = 0;
       
-      // Send auth in production
-      if (this.authToken) {
-        this.send({
-          type: 'auth',
-          user_id: 'user-id',
-          token: this.authToken
-        });
-      }
+      // No authentication needed currently
+      // Just start sending messages
     };
     
     this.ws.onclose = () => {
@@ -362,9 +310,7 @@ const data = await response.json();
 #### Detailed API Health
 ```javascript
 // GET /api/v1/health
-const response = await fetch(`${API_BASE}/api/v1/health`, {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+const response = await fetch(`${API_BASE}/api/v1/health`);
 const data = await response.json();
 // Returns service status for elasticsearch, dynamodb, redis
 ```
@@ -377,7 +323,6 @@ const data = await response.json();
 const response = await fetch(`${API_BASE}/api/v1/match`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -402,7 +347,6 @@ const { cards } = await response.json();
 const response = await fetch(`${API_BASE}/api/v1/lawyers`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${adminToken}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -443,9 +387,7 @@ const { id, message } = await response.json();
 #### Get Lawyer Details
 ```javascript
 // GET /api/v1/lawyers/{lawyer_id}
-const response = await fetch(`${API_BASE}/api/v1/lawyers/${lawyerId}`, {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+const response = await fetch(`${API_BASE}/api/v1/lawyers/${lawyerId}`);
 
 const lawyerDetails = await response.json();
 ```
@@ -458,7 +400,6 @@ formData.append('file', csvFile);
 
 const response = await fetch(`${API_BASE}/api/v1/lawyers/upload`, {
   method: 'POST',
-  headers: { 'Authorization': `Bearer ${adminToken}` },
   body: formData
 });
 
@@ -470,9 +411,7 @@ const { status, indexed_count, errors } = await response.json();
 #### Get Profile
 ```javascript
 // GET /api/v1/profile/{user_id}
-const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`);
 
 const { profile } = await response.json();
 ```
@@ -483,7 +422,6 @@ const { profile } = await response.json();
 const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
   method: 'PUT',
   headers: {
-    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -515,9 +453,7 @@ const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
 #### Get All Conversations
 ```javascript
 // GET /api/v1/conversations
-const response = await fetch(`${API_BASE}/api/v1/conversations?limit=20&offset=0`, {
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+const response = await fetch(`${API_BASE}/api/v1/conversations?limit=20&offset=0`);
 
 const { conversations, total, limit, offset } = await response.json();
 
@@ -539,10 +475,7 @@ conversations.forEach(conv => {
 ```javascript
 // GET /api/v1/conversations/{conversation_id}/messages
 const response = await fetch(
-  `${API_BASE}/api/v1/conversations/${convId}/messages?limit=50&order=asc`,
-  {
-    headers: { 'Authorization': `Bearer ${token}` }
-  }
+  `${API_BASE}/api/v1/conversations/${convId}/messages?limit=50&order=asc`
 );
 
 const { messages, total } = await response.json();
@@ -564,16 +497,6 @@ messages.forEach(msg => {
 ### Common Error Responses
 
 ```javascript
-// 401 Unauthorized
-{
-  "detail": "Authentication required"
-}
-
-// 403 Forbidden
-{
-  "detail": "Admin access required"
-}
-
 // 404 Not Found
 {
   "detail": "Lawyer not found"
@@ -596,6 +519,8 @@ messages.forEach(msg => {
 }
 ```
 
+Note: 401/403 authentication errors won't occur while auth is disabled.
+
 ### Error Handling Best Practices
 
 ```javascript
@@ -605,7 +530,6 @@ class APIClient {
       const response = await fetch(url, {
         ...options,
         headers: {
-          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json',
           ...options.headers
         }
@@ -629,17 +553,13 @@ class APIClient {
   
   handleAPIError(error) {
     switch (error.status) {
-      case 401:
-        // Redirect to login
-        this.redirectToLogin();
-        break;
-      case 403:
-        // Show permission denied
-        this.showError('You do not have permission to perform this action');
-        break;
       case 422:
         // Show validation errors
         this.showValidationErrors(error.details);
+        break;
+      case 404:
+        // Show not found error
+        this.showError('Resource not found');
         break;
       default:
         // Show generic error
@@ -687,7 +607,7 @@ class APIClient {
    # Health check
    curl http://localhost:8000/health
    
-   # Match lawyers (no auth needed in dev)
+   # Match lawyers
    curl -X POST http://localhost:8000/api/v1/match \
      -H "Content-Type: application/json" \
      -d '{"facts": {"zip": "19104"}, "limit": 5}'
@@ -695,28 +615,21 @@ class APIClient {
 
 ### Production Testing
 
-1. **Generate Test Token**:
-   ```javascript
-   // Use the JWT secret from AWS Secrets Manager
-   const jwt = require('jsonwebtoken');
-   const token = jwt.sign(
-     { sub: 'test-user', role: 'user' },
-     process.env.JWT_SECRET_KEY,
-     { expiresIn: '1h' }
-   );
-   ```
-
-2. **Test Production Endpoints**:
+1. **Test Production Endpoints** (No Authentication Required):
    ```bash
-   # Health check (no auth)
+   # Health check
    curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/health
    
-   # Authenticated endpoint
-   curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/api/v1/conversations \
-     -H "Authorization: Bearer ${TOKEN}"
+   # Get conversations
+   curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/api/v1/conversations
+   
+   # Match lawyers
+   curl -X POST https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/api/v1/match \
+     -H "Content-Type: application/json" \
+     -d '{"facts": {"zip": "19104"}, "limit": 5}'
    ```
 
-3. **Monitor Logs**:
+2. **Monitor Logs**:
    - CloudWatch Logs: Check ECS task logs
    - API Gateway Logs: Monitor request/response
    - WebSocket Connection Logs: Check Lambda function logs
@@ -760,34 +673,19 @@ class APIClient {
 
 ### Security Best Practices
 
-1. **Token Storage**:
-   ```javascript
-   // Use secure storage
-   const TokenManager = {
-     setToken(token) {
-       // Use httpOnly cookies or secure storage
-       // Never store in localStorage for sensitive data
-       sessionStorage.setItem('auth_token', token);
-     },
-     
-     getToken() {
-       return sessionStorage.getItem('auth_token');
-     },
-     
-     clearToken() {
-       sessionStorage.removeItem('auth_token');
-     }
-   };
-   ```
-
-2. **Request Validation**:
+1. **Request Validation**:
    - Always validate user input before sending to API
    - Sanitize data to prevent XSS attacks
    - Use HTTPS for all production requests
 
-3. **Rate Limiting**:
+2. **Rate Limiting**:
    - Implement client-side rate limiting
    - Handle 429 (Too Many Requests) responses gracefully
+
+3. **Future Security** (When Auth is Re-enabled):
+   - Token storage in secure locations
+   - Regular token refresh
+   - Proper session management
 
 ## Examples
 
@@ -886,7 +784,7 @@ export function useLoveAndLawChat() {
     }]);
     
     // Send to backend
-    const message = config.authRequired 
+    const message = this.wsUrl.includes('amazonaws.com')
       ? { action: 'sendMessage', data: { type: 'user_msg', text, cid: messageId } }
       : { type: 'user_msg', text, cid: messageId };
       
@@ -944,16 +842,14 @@ function ChatInterface() {
 ```jsx
 // services/lawyerService.js
 class LawyerService {
-  constructor(apiBase, token) {
+  constructor(apiBase) {
     this.apiBase = apiBase;
-    this.token = token;
   }
   
   async searchLawyers(criteria) {
     const response = await fetch(`${this.apiBase}/api/v1/match`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -971,10 +867,7 @@ class LawyerService {
   
   async getLawyerDetails(lawyerId) {
     const response = await fetch(
-      `${this.apiBase}/api/v1/lawyers/${lawyerId}`,
-      {
-        headers: { 'Authorization': `Bearer ${this.token}` }
-      }
+      `${this.apiBase}/api/v1/lawyers/${lawyerId}`
     );
     
     if (!response.ok) {
@@ -989,7 +882,7 @@ class LawyerService {
 function LawyerSearch() {
   const [lawyers, setLawyers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const lawyerService = new LawyerService(config.apiBase, authToken);
+  const lawyerService = new LawyerService(config.apiBase);
   
   const handleSearch = async (criteria) => {
     setLoading(true);
@@ -1023,16 +916,11 @@ function LawyerSearch() {
    - Verify API Gateway WebSocket route is configured
    - Check browser console for CORS errors
 
-2. **401 Unauthorized**:
-   - Ensure JWT token is included in Authorization header
-   - Check token expiration
-   - Verify token is signed with correct secret
-
-3. **CORS Errors**:
+2. **CORS Errors**:
    - Frontend domain must be in backend CORS whitelist
    - Use proxy in development if needed
 
-4. **Empty Responses**:
+3. **Empty Responses**:
    - Check if Elasticsearch is running (for lawyer data)
    - Verify data is loaded in Elasticsearch
 
