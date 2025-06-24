@@ -149,6 +149,154 @@ Get detailed information about a specific lawyer by ID.
 - `404`: Lawyer not found
 - `500`: Server error
 
+### Save Lawyer
+
+Create a new lawyer profile (admin only).
+
+**Endpoint**: `POST /v1/lawyers`
+
+**Request Body**:
+```json
+{
+  "name": "John Smith, Esq.",
+  "firm": "Smith & Associates",
+  "profile_summary": "Experienced divorce attorney specializing in collaborative solutions",
+  "city": "Philadelphia",
+  "state": "PA",
+  "zip": "19104",
+  "practice_areas": ["Divorce", "Child Custody", "Mediation"],
+  "specialties": [
+    {
+      "name": "Collaborative Divorce",
+      "description": "Non-adversarial approach to divorce"
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Pennsylvania Law School",
+      "degree": "J.D.",
+      "year": 2010
+    }
+  ],
+  "professional_experience": "15 years in family law",
+  "years_of_experience": 15,
+  "languages": ["English", "Spanish"],
+  "payment_methods": ["Credit Card", "Check", "Payment Plans"],
+  "phone_numbers": ["(215) 555-0123"],
+  "email": "john@smithlaw.com",
+  "website": "https://smithlaw.com",
+  "awards": ["Super Lawyers 2023"],
+  "associations": ["Pennsylvania Bar Association"],
+  "fee_structure": {
+    "free_consultation": true,
+    "consultation_length": "30 minutes",
+    "hourly_rate": "$250-$300"
+  },
+  "budget_range": "$$",
+  "active": true
+}
+```
+
+**Response**:
+```json
+{
+  "id": "generated-uuid",
+  "message": "Lawyer created successfully"
+}
+```
+
+**Status Codes**:
+- `200`: Lawyer created successfully
+- `403`: Admin access required
+- `500`: Server error
+
+### Get Conversations
+
+Get all chat conversations for the authenticated user.
+
+**Endpoint**: `GET /v1/conversations`
+
+**Query Parameters**:
+- `limit` (optional, default: 20): Number of conversations to return
+- `offset` (optional, default: 0): Pagination offset
+- `status` (optional): Filter by conversation status (active, archived)
+
+**Response**:
+```json
+{
+  "conversations": [
+    {
+      "conversation_id": "conv-uuid-1",
+      "user_id": "user-uuid",
+      "created_at": "2025-06-10T12:00:00Z",
+      "updated_at": "2025-06-10T13:00:00Z",
+      "status": "active",
+      "last_message": "I need help with custody arrangements",
+      "summary": null,
+      "message_count": 15,
+      "average_distress_score": 4.5,
+      "legal_topics": ["divorce", "custody"]
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Status Codes**:
+- `200`: Successful operation
+- `401`: Unauthorized
+- `500`: Server error
+
+### Get Conversation Messages
+
+Get all messages for a specific conversation.
+
+**Endpoint**: `GET /v1/conversations/{conversation_id}/messages`
+
+**Path Parameters**:
+- `conversation_id`: The unique identifier of the conversation
+
+**Query Parameters**:
+- `limit` (optional, default: 50): Number of messages to return
+- `offset` (optional, default: 0): Pagination offset
+- `order` (optional, default: "asc"): Sort order - "asc" or "desc"
+
+**Response**:
+```json
+{
+  "conversation_id": "conv-uuid",
+  "messages": [
+    {
+      "message_id": "msg-uuid-1",
+      "turn_id": "turn-uuid-1",
+      "timestamp": "2025-06-10T12:00:00Z",
+      "role": "user",
+      "content": "I need help with a divorce in Chicago",
+      "redacted": false
+    },
+    {
+      "message_id": "msg-uuid-2",
+      "turn_id": "turn-uuid-1",
+      "timestamp": "2025-06-10T12:00:15Z",
+      "role": "assistant",
+      "content": "I understand you're going through a difficult time...",
+      "redacted": false
+    }
+  ],
+  "total": 2,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Status Codes**:
+- `200`: Successful operation
+- `400`: Invalid parameters
+- `401`: Unauthorized
+- `500`: Server error
+
 ## WebSocket API
 
 The WebSocket API provides real-time conversational support with streaming responses.

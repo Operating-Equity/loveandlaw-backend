@@ -4,1065 +4,1050 @@ This guide provides comprehensive documentation for frontend engineers to integr
 
 ## Table of Contents
 1. [Overview](#overview)
-2. [WebSocket API](#websocket-api)
-3. [REST API Endpoints](#rest-api-endpoints)
+2. [Environment Setup](#environment-setup)
+3. [Authentication](#authentication)
+4. [WebSocket API](#websocket-api)
+5. [REST API Endpoints](#rest-api-endpoints)
    - [Health Check](#1-health-check)
    - [Lawyer Endpoints](#2-lawyer-endpoints)
    - [User Profile](#3-user-profile)
    - [Conversation Management](#4-conversation-management)
    - [Lawyer CSV Upload](#5-lawyer-csv-upload-admin-only)
-4. [Authentication](#authentication)
-5. [Error Handling](#error-handling)
-6. [Examples](#examples)
+6. [Error Handling](#error-handling)
+7. [Testing Guide](#testing-guide)
+8. [Production Deployment](#production-deployment)
+9. [Examples](#examples)
 
 ## Overview
 
 The Love & Law backend provides:
-- **WebSocket API** for real-time chat conversations
-- **REST API** for lawyer search, profile management, and file uploads
+- **WebSocket API** for real-time chat conversations with AI therapeutic responses
+- **REST API** for lawyer search, profile management, conversation history, and administrative functions
 
-Base URLs:
-- Local Development: `http://localhost:8000`
-- Production REST API: `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production`
-- Production WebSocket: `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production`
+### API Endpoints by Environment
 
-**Note**: The production URLs are AWS API Gateway endpoints that route to the ECS backend service. These use HTTPS/WSS for secure connections.
+| Environment | REST API Base URL | WebSocket URL |
+|-------------|------------------|---------------|
+| Local Development | `http://localhost:8000` | `ws://localhost:8000/ws` |
+| Production | `https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production` | `wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production` |
+
+**Note**: Production URLs use AWS API Gateway which routes to ECS backend services. Always use HTTPS/WSS in production.
+
+## Environment Setup
+
+### Development Environment
+
+1. **Local Backend Setup**:
+   ```bash
+   # Clone and setup backend
+   cd loveandlaw-backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   
+   # Create .env file with required variables
+   cp .env.example .env
+   # Edit .env with your API keys
+   
+   # Start services
+   ./start-elasticsearch.sh  # Requires Docker
+   python -m uvicorn src.api.main:app --reload
+   ```
+
+2. **Frontend Configuration**:
+   ```javascript
+   // config/api.js
+   const config = {
+     development: {
+       apiBase: 'http://localhost:8000',
+       wsBase: 'ws://localhost:8000/ws',
+       authRequired: false  // Auth bypassed in dev
+     },
+     production: {
+       apiBase: 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production',
+       wsBase: 'wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production',
+       authRequired: true
+     }
+   };
+   
+   export default config[process.env.NODE_ENV || 'development'];
+   ```
+
+### Production Environment
+
+Production requires proper JWT authentication for most endpoints. See [Authentication](#authentication) section.
+
+## Authentication
+
+### Development Mode
+- Authentication is **bypassed** when `DEBUG=true` and `ENVIRONMENT=development`
+- Default user: `dev_user_123` with admin role
+- No JWT token required
+
+### Production Mode
+- All endpoints except health checks require JWT authentication
+- Tokens must be included in the `Authorization` header: `Bearer <token>`
+- JWT secrets are stored in AWS Secrets Manager
+
+### JWT Token Structure
+```javascript
+{
+  "sub": "user-id",        // User ID
+  "role": "user",          // Role: "user" or "admin"
+  "scopes": ["read", "write"],  // Permissions
+  "exp": 1234567890        // Expiration timestamp
+}
+```
+
+### Getting Authentication Token
+
+#### Option 1: User Registration/Login (Future Implementation)
+```javascript
+// POST /api/v1/auth/register
+const registerResponse = await fetch(`${API_BASE}/api/v1/auth/register`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'secure-password',
+    name: 'John Doe'
+  })
+});
+
+// POST /api/v1/auth/login
+const loginResponse = await fetch(`${API_BASE}/api/v1/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'secure-password'
+  })
+});
+
+const { access_token } = await loginResponse.json();
+```
+
+#### Option 2: Generate Test Token (Development Only)
+```javascript
+// For testing in development
+import jwt from 'jsonwebtoken';
+
+const testToken = jwt.sign(
+  {
+    sub: 'test-user-123',
+    role: 'user',
+    scopes: ['read', 'write'],
+    exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
+  },
+  'development_jwt_secret_key_12345', // From .env
+  { algorithm: 'HS256' }
+);
+```
 
 ## WebSocket API
 
-### Connection
+### Connection Setup
 
 ```javascript
-// Local Development
-const ws = new WebSocket('ws://localhost:8000/ws');
+class LoveAndLawWebSocket {
+  constructor(config) {
+    this.wsUrl = config.wsBase;
+    this.authToken = config.authToken;
+    this.reconnectAttempts = 0;
+    this.maxReconnects = 5;
+  }
 
-// Production (use this for deployed frontend)
-const ws = new WebSocket('wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production');
-```
-
-### Message Flow
-
-#### 1. Connection Established
-When connected, you'll receive:
-```json
-{
-  "type": "connection_established",
-  "connection_id": "uuid",
-  "message": "Connected to Love & Law Assistant"
-}
-```
-
-#### 2. Authentication (Optional in Development)
-Send authentication message:
-```json
-{
-  "type": "auth",
-  "user_id": "user-uuid",
-  "conversation_id": "conversation-uuid" // optional, will be generated if not provided
-}
-```
-
-Response:
-```json
-{
-  "type": "auth_success",
-  "user_id": "user-uuid",
-  "conversation_id": "conversation-uuid"
-}
-```
-
-**Note**: In development mode (`DEBUG=true`), authentication is optional. Messages will use `debug_user` if not authenticated.
-
-#### 3. Sending User Messages
-```json
-{
-  "type": "user_msg",
-  "text": "I need a divorce lawyer in Chicago, IL 60601",
-  "cid": "unique-message-id" // client-generated UUID for this message
-}
-```
-
-#### 4. Receiving Responses
-
-The backend will send multiple message types in response:
-
-##### a. Message Acknowledgment
-```json
-{
-  "type": "message_received",
-  "cid": "unique-message-id"
-}
-```
-
-##### b. AI Response (Streaming)
-The response comes in chunks for real-time display:
-```json
-{
-  "type": "ai_chunk",
-  "cid": "unique-message-id",
-  "text_fragment": "I understand you're looking"
-}
-```
-
-##### c. AI Response Complete
-```json
-{
-  "type": "ai_complete",
-  "cid": "unique-message-id"
-}
-```
-
-##### d. Lawyer Cards (When Matches Found)
-```json
-{
-  "type": "cards",
-  "cid": "unique-message-id",
-  "cards": [
-    {
-      "id": "lawyer-id",
-      "name": "John Smith",
-      "firm": "Smith & Associates",
-      "match_score": "85%",
-      "blurb": "Experienced divorce attorney with 15 years...",
-      "link": "/lawyer/lawyer-id",
-      "match_explanation": "Matched because: specializes in divorce, located near you",
-      "practice_areas": ["Family Law", "Divorce"],
-      "location": {
-        "city": "Chicago",
-        "state": "illinois"
-      },
-      "rating": 4.5,
-      "reviews_count": 127,
-      "budget_range": "$$"
+  connect() {
+    this.ws = new WebSocket(this.wsUrl);
+    
+    this.ws.onopen = () => {
+      console.log('WebSocket connected');
+      this.reconnectAttempts = 0;
+      
+      // Send auth in production
+      if (this.authToken) {
+        this.send({
+          type: 'auth',
+          user_id: 'user-id',
+          token: this.authToken
+        });
+      }
+    };
+    
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      this.attemptReconnect();
+    };
+    
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.handleMessage(data);
+    };
+  }
+  
+  send(data) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      // Production requires 'action' wrapper
+      const message = this.wsUrl.includes('amazonaws.com') 
+        ? { action: 'sendMessage', data }
+        : data;
+        
+      this.ws.send(JSON.stringify(message));
     }
-  ]
-}
-```
-
-**Note**: Lawyer cards are only sent when:
-- The user's distress score is < 7 (not in crisis)
-- Matching lawyers are found based on location and needs
-- The system has enough information to make matches
-
-##### e. Suggestions
-```json
-{
-  "type": "suggestions",
-  "cid": "unique-message-id",
-  "suggestions": [
-    "Would you like to know more about any of these lawyers?",
-    "What questions do you have about the divorce process?",
-    "When would you like to schedule a consultation?"
-  ]
-}
-```
-
-##### f. Reflection Prompts
-```json
-{
-  "type": "reflection",
-  "cid": "unique-message-id",
-  "reflection_type": "emotional",
-  "reflection_insights": [
-    "You've shown great strength in taking this step",
-    "Your concerns about the children are valid"
-  ]
-}
-```
-
-##### g. Metrics (Debug Mode Only)
-```json
-{
-  "type": "metrics",
-  "cid": "unique-message-id",
-  "metrics": {
-    "distress_score": 3.5,
-    "engagement_level": 7.2,
-    "alliance_bond": 6.0,
-    "alliance_goal": 7.5,
-    "alliance_task": 6.8,
-    "sentiment": "neu",
-    "enhanced_sentiment": "nervousness",
-    "legal_intent": ["divorce", "custody"],
-    "active_legal_specialist": "divorce_and_separation"
+  }
+  
+  attemptReconnect() {
+    if (this.reconnectAttempts < this.maxReconnects) {
+      this.reconnectAttempts++;
+      setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+    }
+  }
+  
+  handleMessage(data) {
+    switch(data.type) {
+      case 'connection_established':
+        console.log('Connection established:', data.connection_id);
+        break;
+        
+      case 'auth_success':
+        console.log('Authenticated:', data.user_id);
+        break;
+        
+      case 'message_received':
+        console.log('Message acknowledged:', data.cid);
+        break;
+        
+      case 'ai_chunk':
+        // Append to chat UI
+        this.appendAIResponse(data.text_fragment);
+        break;
+        
+      case 'ai_complete':
+        // Enable user input
+        this.enableUserInput();
+        break;
+        
+      case 'cards':
+        // Display lawyer recommendations
+        this.displayLawyerCards(data.cards);
+        break;
+        
+      case 'suggestions':
+        // Show suggested questions
+        this.displaySuggestions(data.suggestions);
+        break;
+        
+      case 'reflection':
+        // Show reflection insights
+        this.displayReflection(data.reflection_type, data.reflection_insights);
+        break;
+        
+      case 'error':
+        console.error('WebSocket error:', data.message);
+        break;
+    }
   }
 }
 ```
 
-#### 5. Heartbeat
-The server sends periodic heartbeats:
-```json
-{
-  "type": "heartbeat",
-  "timestamp": "2025-06-10T12:00:00Z"
-}
+### Message Types
+
+#### Sending Messages
+```javascript
+// User message
+ws.send({
+  type: 'user_msg',
+  text: 'I need help with child custody',
+  cid: generateUUID() // Client-side generated ID
+});
+
+// Heartbeat (optional)
+ws.send({
+  type: 'heartbeat'
+});
 ```
 
-You can also send heartbeats to keep the connection alive:
-```json
-{
-  "type": "heartbeat"
-}
-```
+#### Receiving Messages
 
-#### 6. Error Messages
-```json
-{
-  "type": "error",
-  "code": "ERROR_CODE",
-  "message": "Human-readable error message"
-}
-```
+1. **AI Response Chunks** (Streaming):
+   ```json
+   {
+     "type": "ai_chunk",
+     "cid": "message-id",
+     "text_fragment": "I understand you're"
+   }
+   ```
 
-#### 7. Session End
-```json
-{
-  "type": "session_end",
-  "message": "Session ended"
-}
-```
+2. **Lawyer Cards**:
+   ```json
+   {
+     "type": "cards",
+     "cid": "message-id",
+     "cards": [
+       {
+         "id": "lawyer-123",
+         "name": "Jane Doe, Esq.",
+         "firm": "Doe Law Firm",
+         "match_score": "92%",
+         "blurb": "Experienced in child custody cases",
+         "link": "/lawyer/lawyer-123",
+         "match_explanation": "Specializes in custody, near your location",
+         "practice_areas": ["Family Law", "Child Custody"],
+         "location": { "city": "Chicago", "state": "IL" },
+         "rating": 4.8,
+         "reviews_count": 156,
+         "budget_range": "$$"
+       }
+     ]
+   }
+   ```
 
-### WebSocket Best Practices
+3. **Suggestions**:
+   ```json
+   {
+     "type": "suggestions",
+     "cid": "message-id",
+     "suggestions": [
+       "What are my rights as a parent?",
+       "How is custody determined?",
+       "What documents do I need?"
+     ]
+   }
+   ```
 
-1. **Reconnection Logic**: Implement automatic reconnection with exponential backoff
-2. **Message Queue**: Queue messages while disconnected and send on reconnection
-3. **Heartbeat**: Send heartbeat every 30 seconds to keep connection alive
-4. **Error Handling**: Display user-friendly messages for connection errors
+4. **Reflection Prompts**:
+   ```json
+   {
+     "type": "reflection",
+     "cid": "message-id",
+     "reflection_type": "emotional",
+     "reflection_insights": [
+       "You're taking positive steps",
+       "Your concerns are valid"
+     ]
+   }
+   ```
+
+5. **Metrics** (Debug mode only):
+   ```json
+   {
+     "type": "metrics",
+     "cid": "message-id",
+     "metrics": {
+       "distress_score": 4.2,
+       "engagement_level": 7.5,
+       "alliance_bond": 6.8,
+       "sentiment": "neu",
+       "legal_intent": ["custody", "divorce"]
+     }
+   }
+   ```
 
 ## REST API Endpoints
 
 ### 1. Health Check
 
-#### GET `/health`
-Basic health check for load balancer.
-
-Response:
-```json
-{
-  "status": "healthy",
-  "service": "Love & Law Backend",
-  "version": "1.0.0",
-  "environment": "development"
-}
+#### Basic Health Check
+```javascript
+// GET /health
+const response = await fetch(`${API_BASE}/health`);
+const data = await response.json();
+// Returns: { status: "healthy", service: "Love & Law Backend", version: "1.0.0" }
 ```
 
-#### GET `/api/v1/health`
-Detailed health check with service status.
-
-Response:
-```json
-{
-  "status": "healthy",
-  "service": "Love & Law Backend API",
-  "version": "1.0.0",
-  "environment": "development",
-  "checks": {
-    "elasticsearch": "healthy",
-    "dynamodb": "healthy",
-    "redis": "not_configured"
-  }
-}
+#### Detailed API Health
+```javascript
+// GET /api/v1/health
+const response = await fetch(`${API_BASE}/api/v1/health`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+const data = await response.json();
+// Returns service status for elasticsearch, dynamodb, redis
 ```
 
 ### 2. Lawyer Endpoints
 
-#### POST `/api/v1/match`
-Search for lawyers based on criteria.
-
-Headers:
-```
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-```
-
-Request Body:
-```json
-{
-  "facts": {
-    "zip": "60601",
-    "city": "Chicago",
-    "state": "IL",
-    "practice_areas": ["divorce", "custody"],
-    "budget_range": "$$",
-    "search_text": "experienced divorce lawyer"
+#### Search/Match Lawyers
+```javascript
+// POST /api/v1/match
+const response = await fetch(`${API_BASE}/api/v1/match`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
   },
-  "limit": 10
-}
-```
-
-Response:
-```json
-{
-  "cards": [
-    {
-      "id": "lawyer-123",
-      "name": "Jane Doe",
-      "firm": "Doe Law Firm",
-      "match_score": 0.92,
-      "blurb": "Experienced family law attorney...",
-      "link": "/lawyer/lawyer-123",
-      "practice_areas": ["Family Law", "Divorce"],
-      "location": {
-        "city": "Chicago",
-        "state": "IL",
-        "zip": "60601"
-      },
-      "rating": 4.8,
-      "reviews_count": 245,
-      "budget_range": "$$"
-    }
-  ]
-}
-```
-
-#### GET `/api/v1/lawyers/{lawyer_id}`
-Get detailed information about a specific lawyer.
-
-Headers:
-```
-Authorization: Bearer <jwt-token>
-```
-
-Response:
-```json
-{
-  "id": "lawyer-123",
-  "name": "Jane Doe",
-  "firm": "Doe Law Firm",
-  "profile_summary": "I am a dedicated family law attorney with 15 years of experience helping clients navigate divorce and custody issues with compassion and expertise.",
-  "city": "Chicago",
-  "state": "IL",
-  "location": {
-    "lat": 41.8781,
-    "lon": -87.6298
-  },
-  "practice_areas": ["Family Law", "Divorce", "Child Custody"],
-  "specialties": [
-    {
-      "name": "Collaborative Divorce",
-      "description": "A cooperative approach to divorce"
+  body: JSON.stringify({
+    facts: {
+      zip: '60601',
+      city: 'Chicago',
+      state: 'IL',
+      practice_areas: ['divorce', 'custody'],
+      budget_range: '$$',
+      search_text: 'experienced collaborative divorce'
     },
-    {
-      "name": "High-Asset Divorce",
-      "description": "Complex property division cases"
-    }
-  ],
-  "education": [
-    {
-      "institution": "Northwestern University School of Law",
-      "degree": "J.D.",
-      "year": 2010
-    }
-  ],
-  "professional_experience": "15 years specializing in family law with a focus on helping clients achieve amicable resolutions.",
-  "years_of_experience": 15,
-  "languages": ["English", "Spanish"],
-  "payment_methods": ["Credit Card", "Cash", "Payment Plans"],
-  "ratings": {
-    "overall": 4.8,
-    "communication": 4.9,
-    "expertise": 4.7,
-    "value": 4.6
+    limit: 10
+  })
+});
+
+const { cards } = await response.json();
+```
+
+#### Create Lawyer (Admin Only)
+```javascript
+// POST /api/v1/lawyers
+const response = await fetch(`${API_BASE}/api/v1/lawyers`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${adminToken}`,
+    'Content-Type': 'application/json'
   },
-  "reviews": [
-    {
-      "author": "Client",
-      "rating": 5,
-      "text": "Jane made a difficult process much easier with her guidance."
-    }
-  ],
-  "phone_numbers": ["(312) 555-1234"],
-  "email": "jane@doelawfirm.com",
-  "website": "https://doelawfirm.com",
-  "awards": ["SuperLawyers 2022", "Best Family Lawyers in Chicago 2023"],
-  "associations": ["Illinois State Bar Association", "American Bar Association"],
-  "fee_structure": {
-    "free_consultation": true,
-    "consultation_length": "60 minutes",
-    "hourly_rate": "$300-$350"
-  },
-  "budget_range": "$$",
-  "active": true
-}
+  body: JSON.stringify({
+    name: 'John Smith, Esq.',
+    firm: 'Smith & Associates',
+    profile_summary: 'Experienced family law attorney',
+    city: 'Philadelphia',
+    state: 'PA',
+    zip: '19104',
+    practice_areas: ['Divorce', 'Child Custody', 'Mediation'],
+    specialties: [
+      {
+        name: 'Collaborative Divorce',
+        description: 'Non-adversarial approach'
+      }
+    ],
+    education: [
+      {
+        institution: 'University of Pennsylvania',
+        degree: 'J.D.',
+        year: 2010
+      }
+    ],
+    years_of_experience: 15,
+    languages: ['English', 'Spanish'],
+    payment_methods: ['Credit Card', 'Check', 'Payment Plans'],
+    phone_numbers: ['(215) 555-0123'],
+    email: 'john@smithlaw.com',
+    website: 'https://smithlaw.com',
+    budget_range: '$$',
+    active: true
+  })
+});
+
+const { id, message } = await response.json();
+```
+
+#### Get Lawyer Details
+```javascript
+// GET /api/v1/lawyers/{lawyer_id}
+const response = await fetch(`${API_BASE}/api/v1/lawyers/${lawyerId}`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+const lawyerDetails = await response.json();
+```
+
+#### Upload Lawyers CSV (Admin Only)
+```javascript
+// POST /api/v1/lawyers/upload
+const formData = new FormData();
+formData.append('file', csvFile);
+
+const response = await fetch(`${API_BASE}/api/v1/lawyers/upload`, {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${adminToken}` },
+  body: formData
+});
+
+const { status, indexed_count, errors } = await response.json();
 ```
 
 ### 3. User Profile
 
-#### GET `/api/v1/profile/{user_id}`
-Get user profile information.
+#### Get Profile
+```javascript
+// GET /api/v1/profile/{user_id}
+const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
 
-Headers:
-```
-Authorization: Bearer <jwt-token>
-```
-
-Response:
-```json
-{
-  "profile": {
-    "user_id": "user-uuid",
-    "created_at": "2025-06-10T12:00:00Z",
-    "updated_at": "2025-06-10T13:00:00Z",
-    "name": "John Doe",
-    "email": "john.doe@example.com",
-    "preferred_avatar": "avatar-url-or-id",
-    "saved_lawyers": ["lawyer-123", "lawyer-456"],
-    "legal_situation": {
-      "type": "divorce",
-      "stage": "initial_consultation"
-    },
-    "milestones_completed": [
-      "initial_contact",
-      "situation_assessment"
-    ],
-    "current_goals": [
-      "find_lawyer",
-      "understand_process"
-    ],
-    "preferences": {
-      "communication_style": "empathetic",
-      "budget_range": "$$"
-    },
-    "average_distress_score": 4.2,
-    "average_engagement_level": 7.5
-  }
-}
+const { profile } = await response.json();
 ```
 
-#### PUT `/api/v1/profile/{user_id}`
-Update user profile information.
-
-Headers:
-```
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-```
-
-Request Body (all fields optional):
-```json
-{
-  "name": "John Doe",
-  "email": "john.doe@example.com",
-  "preferred_avatar": "avatar-url-or-id",
-  "saved_lawyers": ["lawyer-123", "lawyer-456"],
-  "legal_situation": {
-    "type": "divorce",
-    "stage": "attorney_contacted"
+#### Update Profile
+```javascript
+// PUT /api/v1/profile/{user_id}
+const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
   },
-  "current_goals": ["understand_process", "file_paperwork"],
-  "preferences": {
-    "communication_style": "formal",
-    "notification_preferences": {
-      "email": true,
-      "sms": false,
-      "in_app": true
+  body: JSON.stringify({
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    preferred_avatar: 'avatar-2',
+    saved_lawyers: ['lawyer-123', 'lawyer-456'],
+    legal_situation: {
+      type: 'divorce',
+      status: 'considering',
+      children_involved: true,
+      stage: 'initial_consultation'
+    },
+    current_goals: ['understand_process', 'find_lawyer'],
+    preferences: {
+      communication_style: 'supportive',
+      notification_preferences: {
+        email: true,
+        sms: false,
+        in_app: true
+      }
     }
-  }
-}
-```
-
-Response:
-```json
-{
-  "profile": {
-    // Same structure as GET response
-  }
-}
+  })
+});
 ```
 
 ### 4. Conversation Management
 
-#### GET `/api/v1/conversations`
-Get all chat histories for the authenticated user.
+#### Get All Conversations
+```javascript
+// GET /api/v1/conversations
+const response = await fetch(`${API_BASE}/api/v1/conversations?limit=20&offset=0`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
 
-Headers:
-```
-Authorization: Bearer <jwt-token>
-```
+const { conversations, total, limit, offset } = await response.json();
 
-Query Parameters:
-- `limit` (optional): Number of conversations to return (default: 20)
-- `offset` (optional): Pagination offset (default: 0)
-- `status` (optional): Filter by conversation status (active, archived)
-
-Response:
-```json
-{
-  "conversations": [
-    {
-      "conversation_id": "conv-uuid-1",
-      "user_id": "user-uuid",
-      "created_at": "2025-06-10T12:00:00Z",
-      "updated_at": "2025-06-10T13:00:00Z",
-      "status": "active",
-      "last_message": "I need help with custody arrangements",
-      "summary": "User seeking help with child custody during divorce",
-      "message_count": 15,
-      "average_distress_score": 4.5,
-      "legal_topics": ["divorce", "custody"]
-    },
-    {
-      "conversation_id": "conv-uuid-2",
-      "user_id": "user-uuid",
-      "created_at": "2025-06-09T10:00:00Z",
-      "updated_at": "2025-06-09T11:30:00Z",
-      "status": "archived",
-      "last_message": "Thank you for your help",
-      "summary": "User received lawyer recommendations for divorce case",
-      "message_count": 8,
-      "average_distress_score": 3.2,
-      "legal_topics": ["divorce"]
-    }
-  ],
-  "total": 2,
-  "limit": 20,
-  "offset": 0
-}
+// Response includes:
+conversations.forEach(conv => {
+  console.log({
+    id: conv.conversation_id,
+    created: conv.created_at,
+    updated: conv.updated_at,
+    lastMessage: conv.last_message,
+    messageCount: conv.message_count,
+    averageDistress: conv.average_distress_score,
+    topics: conv.legal_topics
+  });
+});
 ```
 
-#### GET `/api/v1/conversations/{conversation_id}/messages`
-Retrieve all messages for a specific conversation.
-
-Headers:
-```
-Authorization: Bearer <jwt-token>
-```
-
-Query Parameters:
-- `limit` (optional): Number of messages to return (default: 50)
-- `offset` (optional): Pagination offset (default: 0)
-- `order` (optional): Sort order - "asc" or "desc" (default: "asc")
-
-Response:
-```json
-{
-  "conversation_id": "conv-uuid",
-  "messages": [
-    {
-      "message_id": "msg-uuid-1",
-      "turn_id": "turn-uuid-1",
-      "timestamp": "2025-06-10T12:00:00Z",
-      "role": "user",
-      "content": "I need help with a divorce in Chicago",
-      "redacted": false
-    },
-    {
-      "message_id": "msg-uuid-2",
-      "turn_id": "turn-uuid-1",
-      "timestamp": "2025-06-10T12:00:05Z",
-      "role": "assistant",
-      "content": "I understand you're going through a difficult time and need help with a divorce in Chicago. I'm here to support you through this process...",
-      "metadata": {
-        "sentiment": "neutral",
-        "distress_score": 4.5,
-        "engagement_level": 7.0,
-        "legal_intent": ["divorce"]
-      }
-    },
-    {
-      "message_id": "msg-uuid-3",
-      "turn_id": "turn-uuid-1",
-      "timestamp": "2025-06-10T12:00:10Z",
-      "role": "system",
-      "content": "lawyer_cards",
-      "cards": [
-        {
-          "id": "lawyer-123",
-          "name": "Jane Doe",
-          "firm": "Doe Law Firm",
-          "match_score": 0.92
-        }
-      ]
-    }
-  ],
-  "total": 15,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-#### POST `/api/v1/conversations`
-Initiate a new conversation.
-
-Headers:
-```
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-```
-
-Request Body (optional):
-```json
-{
-  "initial_message": "I need help with a family law matter",
-  "metadata": {
-    "source": "website",
-    "referrer": "google"
+#### Get Conversation Messages
+```javascript
+// GET /api/v1/conversations/{conversation_id}/messages
+const response = await fetch(
+  `${API_BASE}/api/v1/conversations/${convId}/messages?limit=50&order=asc`,
+  {
+    headers: { 'Authorization': `Bearer ${token}` }
   }
-}
-```
+);
 
-Response:
-```json
-{
-  "conversation_id": "conv-uuid-new",
-  "user_id": "user-uuid",
-  "created_at": "2025-06-10T14:00:00Z",
-  "status": "active",
-  "websocket_url": "wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production",
-  "auth_token": "temporary-websocket-token"
-}
-```
+const { messages, total } = await response.json();
 
-Note: After creating a conversation, connect to the WebSocket using the provided URL and authenticate with the conversation_id.
-
-### 5. Lawyer CSV Upload (Admin Only)
-
-#### POST `/api/v1/lawyers/upload`
-Upload lawyers via CSV file.
-
-Headers:
-```
-Authorization: Bearer <admin-jwt-token>
-Content-Type: multipart/form-data
-```
-
-Form Data:
-- `file`: CSV file with lawyer data
-
-CSV Format:
-```csv
-id,name,firm,practice_areas,city,state,zip,budget_range,rating,reviews_count,description
-1,John Smith,Smith Law,"Family Law,Divorce",Chicago,IL,60601,$$,4.5,150,"Experienced divorce attorney..."
-```
-
-Response:
-```json
-{
-  "status": "completed",
-  "indexed_count": 150,
-  "errors": [
-    "Row 5: Missing required field 'name'"
-  ]
-}
-```
-
-## Authentication
-
-### Development Mode
-- Set `DEBUG=true` in environment variables
-- Authentication is optional
-- Default user: `debug_user`
-
-### Production Mode
-- JWT tokens required for all REST endpoints
-- WebSocket requires authentication message after connection
-- Token format: `Bearer <jwt-token>`
-
-### JWT Token Structure
-```json
-{
-  "user_id": "uuid",
-  "email": "user@example.com",
-  "role": "user|admin",
-  "exp": 1234567890
-}
+// Messages include both user and assistant messages
+messages.forEach(msg => {
+  console.log({
+    id: msg.message_id,
+    role: msg.role, // 'user' or 'assistant'
+    content: msg.content,
+    timestamp: msg.timestamp,
+    redacted: msg.redacted // true if PII was removed
+  });
+});
 ```
 
 ## Error Handling
 
-### HTTP Status Codes
-- `200`: Success
-- `400`: Bad Request (invalid input)
-- `401`: Unauthorized (missing/invalid token)
-- `403`: Forbidden (insufficient permissions)
-- `404`: Not Found
-- `500`: Internal Server Error
+### Common Error Responses
 
-### WebSocket Error Types
-- `auth_failed`: Authentication failed
-- `invalid_message`: Message format invalid
-- `rate_limit`: Too many messages
-- `internal_error`: Server error
+```javascript
+// 401 Unauthorized
+{
+  "detail": "Authentication required"
+}
+
+// 403 Forbidden
+{
+  "detail": "Admin access required"
+}
+
+// 404 Not Found
+{
+  "detail": "Lawyer not found"
+}
+
+// 422 Validation Error
+{
+  "detail": [
+    {
+      "loc": ["body", "name"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+
+// 500 Internal Server Error
+{
+  "detail": "Internal server error"
+}
+```
+
+### Error Handling Best Practices
+
+```javascript
+class APIClient {
+  async request(url, options = {}) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new APIError(response.status, error.detail);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error instanceof APIError) {
+        this.handleAPIError(error);
+      } else {
+        console.error('Network error:', error);
+        throw error;
+      }
+    }
+  }
+  
+  handleAPIError(error) {
+    switch (error.status) {
+      case 401:
+        // Redirect to login
+        this.redirectToLogin();
+        break;
+      case 403:
+        // Show permission denied
+        this.showError('You do not have permission to perform this action');
+        break;
+      case 422:
+        // Show validation errors
+        this.showValidationErrors(error.details);
+        break;
+      default:
+        // Show generic error
+        this.showError('An error occurred. Please try again.');
+    }
+  }
+}
+```
+
+## Testing Guide
+
+### Local Testing
+
+1. **Start Backend Services**:
+   ```bash
+   # Terminal 1: Start Elasticsearch
+   ./start-elasticsearch.sh
+   
+   # Terminal 2: Start backend
+   source venv/bin/activate
+   python -m uvicorn src.api.main:app --reload
+   ```
+
+2. **Test WebSocket Connection**:
+   ```javascript
+   // test-websocket.js
+   const ws = new WebSocket('ws://localhost:8000/ws');
+   
+   ws.onopen = () => {
+     console.log('Connected');
+     ws.send(JSON.stringify({
+       type: 'user_msg',
+       text: 'Test message',
+       cid: 'test-123'
+     }));
+   };
+   
+   ws.onmessage = (event) => {
+     console.log('Received:', JSON.parse(event.data));
+   };
+   ```
+
+3. **Test REST Endpoints**:
+   ```bash
+   # Health check
+   curl http://localhost:8000/health
+   
+   # Match lawyers (no auth needed in dev)
+   curl -X POST http://localhost:8000/api/v1/match \
+     -H "Content-Type: application/json" \
+     -d '{"facts": {"zip": "19104"}, "limit": 5}'
+   ```
+
+### Production Testing
+
+1. **Generate Test Token**:
+   ```javascript
+   // Use the JWT secret from AWS Secrets Manager
+   const jwt = require('jsonwebtoken');
+   const token = jwt.sign(
+     { sub: 'test-user', role: 'user' },
+     process.env.JWT_SECRET_KEY,
+     { expiresIn: '1h' }
+   );
+   ```
+
+2. **Test Production Endpoints**:
+   ```bash
+   # Health check (no auth)
+   curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/health
+   
+   # Authenticated endpoint
+   curl https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production/api/v1/conversations \
+     -H "Authorization: Bearer ${TOKEN}"
+   ```
+
+3. **Monitor Logs**:
+   - CloudWatch Logs: Check ECS task logs
+   - API Gateway Logs: Monitor request/response
+   - WebSocket Connection Logs: Check Lambda function logs
+
+## Production Deployment
+
+### Frontend Deployment Checklist
+
+1. **Environment Variables**:
+   ```javascript
+   // .env.production
+   REACT_APP_API_BASE=https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production
+   REACT_APP_WS_BASE=wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production
+   REACT_APP_AUTH_REQUIRED=true
+   ```
+
+2. **CORS Configuration**:
+   - Ensure your frontend domain is whitelisted in backend CORS settings
+   - Contact backend team to add your domain if needed
+
+3. **SSL/TLS**:
+   - Frontend must be served over HTTPS in production
+   - WebSocket connections require WSS protocol
+
+4. **Error Monitoring**:
+   ```javascript
+   // Add error boundary for API failures
+   class APIErrorBoundary extends React.Component {
+     componentDidCatch(error, errorInfo) {
+       // Log to monitoring service
+       console.error('API Error:', error, errorInfo);
+       // Show user-friendly error
+     }
+   }
+   ```
+
+5. **Performance Optimization**:
+   - Implement request caching where appropriate
+   - Use connection pooling for WebSocket
+   - Add retry logic with exponential backoff
+
+### Security Best Practices
+
+1. **Token Storage**:
+   ```javascript
+   // Use secure storage
+   const TokenManager = {
+     setToken(token) {
+       // Use httpOnly cookies or secure storage
+       // Never store in localStorage for sensitive data
+       sessionStorage.setItem('auth_token', token);
+     },
+     
+     getToken() {
+       return sessionStorage.getItem('auth_token');
+     },
+     
+     clearToken() {
+       sessionStorage.removeItem('auth_token');
+     }
+   };
+   ```
+
+2. **Request Validation**:
+   - Always validate user input before sending to API
+   - Sanitize data to prevent XSS attacks
+   - Use HTTPS for all production requests
+
+3. **Rate Limiting**:
+   - Implement client-side rate limiting
+   - Handle 429 (Too Many Requests) responses gracefully
 
 ## Examples
 
-### Complete WebSocket Conversation Flow
+### Complete React Integration Example
 
-```javascript
-// 1. Connect and authenticate
-// For production, use the AWS API Gateway WebSocket endpoint
-const wsUrl = process.env.NODE_ENV === 'production' 
-  ? 'wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production'
-  : 'ws://localhost:8000/ws';
+```jsx
+// hooks/useLoveAndLawAPI.js
+import { useState, useEffect, useCallback } from 'react';
+import config from '../config/api';
 
-const ws = new WebSocket(wsUrl);
-const userId = 'user-123';
-const conversationId = 'conv-456';
-
-ws.onopen = () => {
-  console.log('Connected to Love & Law');
-  
-  // Send auth (optional in dev)
-  ws.send(JSON.stringify({
-    type: 'auth',
-    user_id: userId,
-    conversation_id: conversationId
-  }));
-};
-
-// 2. Handle messages
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  
-  switch(data.type) {
-    case 'auth_success':
-      // Ready to chat
-      sendMessage("I need help with a divorce in Chicago");
-      break;
-      
-    case 'ai_chunk':
-      // Append to current response
-      appendToChat(data.text_fragment);
-      break;
-      
-    case 'ai_complete':
-      // Response finished
-      markResponseComplete();
-      break;
-      
-    case 'cards':
-      // Display lawyer matches
-      displayLawyerCards(data.cards);
-      break;
-      
-    case 'suggestions':
-      // Show suggestion buttons
-      displaySuggestions(data.suggestions);
-      break;
-      
-    case 'reflection':
-      // Show reflection insights
-      displayReflection(data.reflection_insights);
-      break;
-      
-    case 'metrics':
-      // Debug metrics
-      console.log('Conversation metrics:', data.metrics);
-      break;
-  }
-};
-
-// 3. Send a message
-function sendMessage(text) {
-  const message = {
-    type: 'user_msg',
-    text: text,
-    cid: generateUUID()
-  };
-  ws.send(JSON.stringify(message));
-}
-
-// 4. Handle lawyer cards
-function displayLawyerCards(cards) {
-  cards.forEach(lawyer => {
-    console.log(`${lawyer.name} - ${lawyer.match_score} match`);
-    console.log(`  Firm: ${lawyer.firm}`);
-    console.log(`  Location: ${lawyer.location.city}, ${lawyer.location.state}`);
-    console.log(`  Rating: ${lawyer.rating} (${lawyer.reviews_count} reviews)`);
-    console.log(`  Budget: ${lawyer.budget_range}`);
-    console.log(`  Why matched: ${lawyer.match_explanation}`);
-  });
-}
-```
-
-### REST API Example
-
-```javascript
-// Set base URL based on environment
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production'
-  : 'http://localhost:8000';
-
-// Search for lawyers
-async function searchLawyers() {
-  const response = await fetch(`${API_BASE_URL}/api/v1/match`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${authToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      facts: {
-        city: 'Chicago',
-        state: 'IL',
-        practice_areas: ['divorce'],
-        budget_range: '$$'
-      },
-      limit: 5
-    })
-  });
-  
-  const data = await response.json();
-  return data.cards;
-}
-
-// Get lawyer details
-async function getLawyerDetails(lawyerId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/lawyers/${lawyerId}`, {
-    headers: {
-      'Authorization': `Bearer ${authToken}`
-    }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch lawyer details: ${response.status}`);
-  }
-  
-  return response.json();
-}
-
-// Get user profile
-async function getUserProfile(userId) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/profile/${userId}`, {
-    headers: {
-      'Authorization': `Bearer ${authToken}`
-    }
-  });
-  
-  return response.json();
-}
-
-// Health check
-async function checkHealth() {
-  const response = await fetch(`${API_BASE_URL}/api/v1/health`);
-  return response.json();
-}
-```
-
-## Important Notes
-
-1. **Lawyer Matching**: The system uses progressive information gathering. Initial messages may not return lawyer matches until enough information is collected (location, legal issue, etc.).
-
-2. **Crisis Handling**: If a user's distress score is >= 7, the system prioritizes emotional support over lawyer matching.
-
-3. **Legal Specialists**: The system routes conversations to appropriate legal specialists based on the detected legal intent (divorce, custody, adoption, etc.).
-
-4. **PII Protection**: All user messages are automatically scanned and redacted for personally identifiable information (PII) before processing.
-
-5. **Rate Limiting**: WebSocket connections are limited to prevent abuse. Implement exponential backoff for reconnections.
-
-## Lawyer Details Integration
-
-When integrating the lawyer details endpoint into your frontend, follow these best practices:
-
-### When to Fetch Lawyer Details
-
-1. **After Initial Matching**: Fetch detailed profiles when a user clicks on a lawyer card from the matching results
-2. **For Comparison Views**: When displaying lawyer comparison features
-3. **Before Scheduling Consultations**: Fetch full details before a user schedules a consultation
-
-### Implementation Example
-
-```javascript
-// Component for displaying lawyer details
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../config';
-
-function LawyerProfile() {
-  const [lawyer, setLawyer] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { lawyerId } = useParams();
+export function useLoveAndLawChat() {
+  const [ws, setWs] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   
   useEffect(() => {
-    const fetchLawyerDetails = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/v1/lawyers/${lawyerId}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch lawyer details: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        setLawyer(data);
-      } catch (err) {
-        setError(err.message);
-        console.error('Error fetching lawyer details:', err);
-      } finally {
-        setLoading(false);
-      }
+    const websocket = new WebSocket(config.wsBase);
+    
+    websocket.onopen = () => {
+      setIsConnected(true);
+      setWs(websocket);
     };
     
-    fetchLawyerDetails();
-  }, [lawyerId]);
+    websocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      handleWebSocketMessage(data);
+    };
+    
+    websocket.onclose = () => {
+      setIsConnected(false);
+      // Implement reconnection logic
+    };
+    
+    return () => {
+      websocket.close();
+    };
+  }, []);
   
-  if (loading) return <div className="loading-spinner">Loading...</div>;
-  if (error) return <div className="error-message">Error: {error}</div>;
-  if (!lawyer) return <div>No lawyer found</div>;
+  const handleWebSocketMessage = (data) => {
+    switch (data.type) {
+      case 'ai_chunk':
+        setIsTyping(true);
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant' && last.id === data.cid) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, content: last.content + data.text_fragment }
+            ];
+          }
+          return [...prev, {
+            id: data.cid,
+            role: 'assistant',
+            content: data.text_fragment,
+            timestamp: new Date()
+          }];
+        });
+        break;
+        
+      case 'ai_complete':
+        setIsTyping(false);
+        break;
+        
+      case 'cards':
+        setMessages(prev => [...prev, {
+          id: `cards-${Date.now()}`,
+          type: 'lawyer_cards',
+          cards: data.cards,
+          timestamp: new Date()
+        }]);
+        break;
+        
+      case 'suggestions':
+        setMessages(prev => [...prev, {
+          id: `suggestions-${Date.now()}`,
+          type: 'suggestions',
+          suggestions: data.suggestions,
+          timestamp: new Date()
+        }]);
+        break;
+    }
+  };
+  
+  const sendMessage = useCallback((text) => {
+    if (!ws || !isConnected) return;
+    
+    const messageId = `msg-${Date.now()}`;
+    
+    // Add user message to UI
+    setMessages(prev => [...prev, {
+      id: messageId,
+      role: 'user',
+      content: text,
+      timestamp: new Date()
+    }]);
+    
+    // Send to backend
+    const message = config.authRequired 
+      ? { action: 'sendMessage', data: { type: 'user_msg', text, cid: messageId } }
+      : { type: 'user_msg', text, cid: messageId };
+      
+    ws.send(JSON.stringify(message));
+  }, [ws, isConnected]);
+  
+  return {
+    messages,
+    sendMessage,
+    isConnected,
+    isTyping
+  };
+}
+
+// components/ChatInterface.jsx
+function ChatInterface() {
+  const { messages, sendMessage, isConnected, isTyping } = useLoveAndLawChat();
+  const [input, setInput] = useState('');
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (input.trim() && isConnected) {
+      sendMessage(input);
+      setInput('');
+    }
+  };
   
   return (
-    <div className="lawyer-profile">
-      <header>
-        <h1>{lawyer.name}</h1>
-        <h2>{lawyer.firm}</h2>
-        <div className="rating">
-          <span className="stars">{renderStars(lawyer.ratings.overall)}</span>
-          <span className="review-count">({lawyer.reviews.length} reviews)</span>
-        </div>
-      </header>
-      
-      <div className="contact-info">
-        <p>Phone: {lawyer.phone_numbers[0]}</p>
-        <p>Email: {lawyer.email}</p>
-        <a href={lawyer.website} target="_blank" rel="noopener noreferrer">Visit Website</a>
-      </div>
-      
-      <div className="profile-summary">
-        <h3>About</h3>
-        <p>{lawyer.profile_summary}</p>
-      </div>
-      
-      <div className="specialties">
-        <h3>Specialties</h3>
-        <ul>
-          {lawyer.specialties.map((specialty, index) => (
-            <li key={index}>
-              <strong>{specialty.name}</strong>: {specialty.description}
-            </li>
-          ))}
-        </ul>
-      </div>
-      
-      <div className="education">
-        <h3>Education</h3>
-        <ul>
-          {lawyer.education.map((edu, index) => (
-            <li key={index}>
-              {edu.degree} from {edu.institution}, {edu.year}
-            </li>
-          ))}
-        </ul>
-      </div>
-      
-      <div className="reviews">
-        <h3>Client Reviews</h3>
-        {lawyer.reviews.map((review, index) => (
-          <div key={index} className="review">
-            <div className="review-rating">{renderStars(review.rating)}</div>
-            <p className="review-text">{review.text}</p>
-            <p className="review-author">— {review.author}</p>
-          </div>
+    <div className="chat-container">
+      <div className="messages">
+        {messages.map(msg => (
+          <Message key={msg.id} {...msg} />
         ))}
+        {isTyping && <TypingIndicator />}
       </div>
       
-      <div className="cta">
-        <button className="schedule-consultation">
-          Schedule Consultation
+      <form onSubmit={handleSubmit}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+          disabled={!isConnected}
+        />
+        <button type="submit" disabled={!isConnected}>
+          Send
         </button>
-      </div>
+      </form>
     </div>
   );
 }
+```
 
-function renderStars(rating) {
-  const fullStars = Math.floor(rating);
-  const halfStar = rating % 1 >= 0.5;
-  const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+### Lawyer Search Integration
+
+```jsx
+// services/lawyerService.js
+class LawyerService {
+  constructor(apiBase, token) {
+    this.apiBase = apiBase;
+    this.token = token;
+  }
+  
+  async searchLawyers(criteria) {
+    const response = await fetch(`${this.apiBase}/api/v1/match`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        facts: criteria,
+        limit: 10
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to search lawyers');
+    }
+    
+    return await response.json();
+  }
+  
+  async getLawyerDetails(lawyerId) {
+    const response = await fetch(
+      `${this.apiBase}/api/v1/lawyers/${lawyerId}`,
+      {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to get lawyer details');
+    }
+    
+    return await response.json();
+  }
+}
+
+// components/LawyerSearch.jsx
+function LawyerSearch() {
+  const [lawyers, setLawyers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const lawyerService = new LawyerService(config.apiBase, authToken);
+  
+  const handleSearch = async (criteria) => {
+    setLoading(true);
+    try {
+      const { cards } = await lawyerService.searchLawyers(criteria);
+      setLawyers(cards);
+    } catch (error) {
+      console.error('Search failed:', error);
+      // Handle error
+    } finally {
+      setLoading(false);
+    }
+  };
   
   return (
-    <>
-      {'★'.repeat(fullStars)}
-      {halfStar ? '½' : ''}
-      {'☆'.repeat(emptyStars)}
-    </>
+    <div>
+      <SearchForm onSubmit={handleSearch} />
+      {loading && <LoadingSpinner />}
+      <LawyerGrid lawyers={lawyers} />
+    </div>
   );
 }
-
-export default LawyerProfile;
 ```
 
-### Error Handling and Fallbacks
+## Troubleshooting
 
-Always implement proper error handling for lawyer detail fetching:
+### Common Issues
 
-1. **Network Errors**: Display user-friendly error messages with retry options
-2. **404 Not Found**: Provide navigation back to search results or suggest similar lawyers
-3. **Auth Errors**: Redirect to login if token is expired
+1. **WebSocket Connection Fails**:
+   - Check if using correct protocol (ws:// for local, wss:// for production)
+   - Verify API Gateway WebSocket route is configured
+   - Check browser console for CORS errors
 
-### Caching Strategy
+2. **401 Unauthorized**:
+   - Ensure JWT token is included in Authorization header
+   - Check token expiration
+   - Verify token is signed with correct secret
 
-Consider implementing a caching strategy for lawyer details:
+3. **CORS Errors**:
+   - Frontend domain must be in backend CORS whitelist
+   - Use proxy in development if needed
 
+4. **Empty Responses**:
+   - Check if Elasticsearch is running (for lawyer data)
+   - Verify data is loaded in Elasticsearch
+
+### Debug Mode
+
+Enable debug mode to see additional metrics:
 ```javascript
-// Simple lawyer profile cache
-const lawyerCache = new Map();
-
-export async function getLawyerDetails(lawyerId) {
-  // Check cache first
-  if (lawyerCache.has(lawyerId)) {
-    const cachedData = lawyerCache.get(lawyerId);
-    const cacheAge = Date.now() - cachedData.timestamp;
-    
-    // Use cache if less than 5 minutes old
-    if (cacheAge < 5 * 60 * 1000) {
-      return cachedData.data;
-    }
-  }
-  
-  // Fetch fresh data
-  const response = await fetch(`${API_BASE_URL}/api/v1/lawyers/${lawyerId}`, {
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-    }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch lawyer details: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  
-  // Update cache
-  lawyerCache.set(lawyerId, {
-    data,
-    timestamp: Date.now()
-  });
-  
-  return data;
-}
+// In development, metrics are automatically included
+// Look for messages with type: 'metrics' in WebSocket responses
 ```
-
-## Production Configuration
-
-### Environment Variables for Frontend
-```javascript
-// .env.production
-REACT_APP_API_BASE_URL=https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production
-REACT_APP_WS_URL=wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production
-
-// .env.development
-REACT_APP_API_BASE_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000/ws
-```
-
-### CORS Configuration
-The production backend is configured to accept requests from your frontend domain. Make sure your frontend domain is whitelisted in the backend CORS settings.
-
-### SSL/TLS
-All production connections use SSL/TLS encryption:
-- REST API: HTTPS
-- WebSocket: WSS (WebSocket Secure)
 
 ## Support
 
-For questions or issues:
-- GitHub Issues: https://github.com/loveandlaw/backend/issues
-- Technical Documentation: See ARCHITECTURE.md
-- API Updates: Check CHANGELOG.md
-- Deployment Guide: See DEPLOYMENT_GUIDE.md
+For issues or questions:
+- Backend Issues: Create issue in backend repository
+- API Changes: Check API documentation
+- Production Issues: Contact DevOps team
+- Security Concerns: Contact security team immediately

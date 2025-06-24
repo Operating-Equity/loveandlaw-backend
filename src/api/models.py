@@ -75,3 +75,75 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class LawyerCreateRequest(BaseModel):
+    """Request model for creating a new lawyer"""
+    name: str = Field(..., description="Lawyer's full name")
+    firm: str = Field(..., description="Law firm name")
+    profile_summary: Optional[str] = Field(None, description="Brief professional summary")
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip: Optional[str] = None
+    practice_areas: List[str] = Field(default_factory=list, description="List of practice areas")
+    specialties: List[Dict[str, Any]] = Field(default_factory=list, description="Specialized areas of expertise")
+    education: List[Dict[str, Any]] = Field(default_factory=list, description="Educational background")
+    professional_experience: Optional[str] = None
+    years_of_experience: Optional[int] = None
+    languages: List[str] = Field(default_factory=list, description="Languages spoken")
+    payment_methods: List[str] = Field(default_factory=list, description="Accepted payment methods")
+    phone_numbers: List[str] = Field(default_factory=list, description="Contact phone numbers")
+    email: Optional[str] = None
+    website: Optional[str] = None
+    awards: List[str] = Field(default_factory=list, description="Professional awards and recognitions")
+    associations: List[str] = Field(default_factory=list, description="Professional associations")
+    fee_structure: Optional[Dict[str, Any]] = None
+    budget_range: Optional[str] = Field(None, description="Budget range (e.g., '$', '$$', '$$$')")
+    active: bool = Field(default=True, description="Whether the lawyer is actively practicing")
+
+
+class LawyerCreateResponse(BaseModel):
+    """Response model for lawyer creation"""
+    id: str
+    message: str = "Lawyer created successfully"
+
+
+class ConversationSummary(BaseModel):
+    """Summary of a conversation"""
+    conversation_id: str
+    user_id: str
+    created_at: str
+    updated_at: str
+    status: str = Field(default="active", description="active or archived")
+    last_message: Optional[str] = None
+    summary: Optional[str] = None
+    message_count: int = 0
+    average_distress_score: float = 5.0
+    legal_topics: List[str] = Field(default_factory=list)
+
+
+class ConversationsListResponse(BaseModel):
+    """Response model for conversations list"""
+    conversations: List[ConversationSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class ConversationMessage(BaseModel):
+    """A single message in a conversation"""
+    message_id: str
+    turn_id: str
+    timestamp: str
+    role: str  # "user" or "assistant"
+    content: str
+    redacted: bool = False
+
+
+class ConversationMessagesResponse(BaseModel):
+    """Response model for conversation messages"""
+    conversation_id: str
+    messages: List[ConversationMessage]
+    total: int
+    limit: int
+    offset: int

@@ -6,13 +6,17 @@ import csv
 import io
 import json
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from datetime import datetime
 
 from src.config.settings import settings
 from src.services.database import initialize_databases, close_databases, elasticsearch_service, dynamodb_service
-from src.api.models import MatchRequest, LawyerUploadResponse, ProfileResponse, ProfileUpdateRequest, LawyerDetailsResponse
+from src.api.models import (
+    MatchRequest, LawyerUploadResponse, ProfileResponse, ProfileUpdateRequest, 
+    LawyerDetailsResponse, LawyerCreateRequest, LawyerCreateResponse,
+    ConversationSummary, ConversationsListResponse, ConversationMessage, ConversationMessagesResponse
+)
 from src.api.auth import get_current_user
 from src.api.websocket_internal import router as websocket_internal_router
 from src.utils.logger import get_logger
@@ -344,6 +348,63 @@ async def update_profile(
         raise HTTPException(status_code=500, detail="Error updating profile")
 
 
+@app.post(f"/api/{settings.api_version}/lawyers")
+async def create_lawyer(
+    lawyer: LawyerCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> LawyerCreateResponse:
+    """Create a new lawyer profile (admin only)"""
+    
+    # Check admin permissions
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Generate a unique ID for the lawyer
+        lawyer_id = str(uuid4())
+        
+        # Build lawyer document
+        lawyer_doc = {
+            "id": lawyer_id,
+            "name": lawyer.name,
+            "firm": lawyer.firm,
+            "profile_summary": lawyer.profile_summary,
+            "city": lawyer.city,
+            "state": lawyer.state,
+            "location": {
+                "zip": lawyer.zip or "",
+                "city": lawyer.city or "",
+                "state": lawyer.state or ""
+            },
+            "practice_areas": lawyer.practice_areas,
+            "specialties": lawyer.specialties,
+            "education": lawyer.education,
+            "professional_experience": lawyer.professional_experience,
+            "years_of_experience": lawyer.years_of_experience,
+            "languages": lawyer.languages,
+            "payment_methods": lawyer.payment_methods,
+            "phone_numbers": lawyer.phone_numbers,
+            "email": lawyer.email,
+            "website": lawyer.website,
+            "awards": lawyer.awards,
+            "associations": lawyer.associations,
+            "fee_structure": lawyer.fee_structure,
+            "budget_range": lawyer.budget_range,
+            "active": lawyer.active,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        # Index in Elasticsearch
+        await elasticsearch_service.index_lawyer(lawyer_doc)
+        
+        return LawyerCreateResponse(id=lawyer_id)
+        
+    except Exception as e:
+        logger.error(f"Error creating lawyer: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating lawyer: {str(e)}")
+
+
 @app.get(f"/api/{settings.api_version}/lawyers/{{lawyer_id}}")
 async def get_lawyer_details(
     lawyer_id: str,
@@ -392,6 +453,86 @@ async def get_lawyer_details(
     except Exception as e:
         logger.error(f"Error fetching lawyer details: {e}")
         raise HTTPException(status_code=500, detail="Error fetching lawyer details")
+
+
+@app.get(f"/api/{settings.api_version}/conversations")
+async def get_conversations(
+    limit: int = 20,
+    offset: int = 0,
+    status: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ConversationsListResponse:
+    """Get all conversations for the authenticated user"""
+    try:
+        user_id = current_user["user_id"]
+        
+        # Get conversations from DynamoDB
+        result = await dynamodb_service.get_user_conversations(
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            status=status
+        )
+        
+        # Convert to response model
+        conversations = []
+        for conv in result.get("conversations", []):
+            conversations.append(ConversationSummary(**conv))
+        
+        return ConversationsListResponse(
+            conversations=conversations,
+            total=result.get("total", 0),
+            limit=limit,
+            offset=offset
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching conversations: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching conversations")
+
+
+@app.get(f"/api/{settings.api_version}/conversations/{{conversation_id}}/messages")
+async def get_conversation_messages(
+    conversation_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    order: str = "asc",
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ConversationMessagesResponse:
+    """Get all messages for a specific conversation"""
+    
+    # Validate order parameter
+    if order not in ["asc", "desc"]:
+        raise HTTPException(status_code=400, detail="Order must be 'asc' or 'desc'")
+    
+    try:
+        user_id = current_user["user_id"]
+        
+        # Get messages from DynamoDB
+        result = await dynamodb_service.get_conversation_messages(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            limit=limit,
+            offset=offset,
+            order=order
+        )
+        
+        # Convert to response model
+        messages = []
+        for msg in result.get("messages", []):
+            messages.append(ConversationMessage(**msg))
+        
+        return ConversationMessagesResponse(
+            conversation_id=conversation_id,
+            messages=messages,
+            total=result.get("total", 0),
+            limit=limit,
+            offset=offset
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching conversation messages: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching conversation messages")
 
 
 @app.websocket("/ws")

@@ -194,6 +194,158 @@ class DynamoDBService:
             logger.error(f"Failed to get recent turns: {e}")
             return []
     
+    async def get_user_conversations(self, user_id: str, limit: int = 20, offset: int = 0, status: str = None) -> Dict[str, Any]:
+        """Get all conversations for a user with pagination"""
+        if not self.conversation_table:
+            logger.warning("DynamoDB not initialized, returning empty conversations")
+            return {"conversations": [], "total": 0}
+            
+        try:
+            # Query all turns for the user
+            response = await self.conversation_table.query(
+                KeyConditionExpression='user_id = :user_id',
+                ExpressionAttributeValues={':user_id': user_id},
+                ScanIndexForward=False  # Most recent first
+            )
+            
+            items = response.get('Items', [])
+            
+            # Group by conversation_id
+            conversations_map = {}
+            for item in items:
+                conv_id = item.get('conversation_id')
+                if not conv_id:
+                    continue
+                    
+                if conv_id not in conversations_map:
+                    conversations_map[conv_id] = {
+                        'conversation_id': conv_id,
+                        'user_id': user_id,
+                        'created_at': item.get('created_at'),
+                        'updated_at': item.get('created_at'),
+                        'messages': [],
+                        'distress_scores': []
+                    }
+                
+                conversations_map[conv_id]['messages'].append(item)
+                conversations_map[conv_id]['updated_at'] = max(
+                    conversations_map[conv_id]['updated_at'],
+                    item.get('created_at', '')
+                )
+                
+                if item.get('distress_score') is not None:
+                    conversations_map[conv_id]['distress_scores'].append(float(item['distress_score']))
+            
+            # Build conversation summaries
+            conversations = []
+            for conv_id, conv_data in conversations_map.items():
+                messages = conv_data['messages']
+                
+                # Get last user message
+                user_messages = [m for m in messages if m.get('user_text')]
+                last_message = user_messages[0].get('user_text', '') if user_messages else ''
+                
+                # Calculate average distress score
+                avg_distress = sum(conv_data['distress_scores']) / len(conv_data['distress_scores']) if conv_data['distress_scores'] else 5.0
+                
+                # Extract legal topics
+                legal_topics = set()
+                for msg in messages:
+                    if msg.get('legal_intent'):
+                        legal_topics.update(msg['legal_intent'])
+                
+                conversation_summary = {
+                    'conversation_id': conv_id,
+                    'user_id': user_id,
+                    'created_at': conv_data['created_at'],
+                    'updated_at': conv_data['updated_at'],
+                    'status': 'active',  # Default for now
+                    'last_message': last_message[:100] if last_message else None,
+                    'summary': None,  # To be implemented
+                    'message_count': len(messages),
+                    'average_distress_score': avg_distress,
+                    'legal_topics': list(legal_topics)
+                }
+                
+                conversations.append(conversation_summary)
+            
+            # Sort by updated_at descending
+            conversations.sort(key=lambda x: x['updated_at'], reverse=True)
+            
+            # Apply pagination
+            total = len(conversations)
+            conversations = conversations[offset:offset + limit]
+            
+            return {
+                'conversations': conversations,
+                'total': total
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get user conversations: {e}")
+            return {"conversations": [], "total": 0}
+    
+    async def get_conversation_messages(self, user_id: str, conversation_id: str, 
+                                      limit: int = 50, offset: int = 0, 
+                                      order: str = "asc") -> Dict[str, Any]:
+        """Get all messages for a specific conversation"""
+        if not self.conversation_table:
+            logger.warning("DynamoDB not initialized, returning empty messages")
+            return {"messages": [], "total": 0}
+            
+        try:
+            # Query all turns for the user
+            response = await self.conversation_table.query(
+                KeyConditionExpression='user_id = :user_id',
+                ExpressionAttributeValues={':user_id': user_id},
+                ScanIndexForward=(order == "asc")
+            )
+            
+            # Filter for specific conversation
+            all_items = response.get('Items', [])
+            conversation_items = [
+                item for item in all_items 
+                if item.get('conversation_id') == conversation_id
+            ]
+            
+            # Convert to message format
+            messages = []
+            for item in conversation_items:
+                # User message
+                if item.get('user_text'):
+                    messages.append({
+                        'message_id': f"{item['turn_id']}-user",
+                        'turn_id': item['turn_id'],
+                        'timestamp': item.get('created_at', ''),
+                        'role': 'user',
+                        'content': item['user_text'],
+                        'redacted': item.get('pii_found', False)
+                    })
+                
+                # Assistant message
+                if item.get('assistant_response'):
+                    messages.append({
+                        'message_id': f"{item['turn_id']}-assistant",
+                        'turn_id': item['turn_id'],
+                        'timestamp': item.get('created_at', ''),
+                        'role': 'assistant',
+                        'content': item['assistant_response'],
+                        'redacted': False
+                    })
+            
+            # Apply pagination
+            total = len(messages)
+            messages = messages[offset:offset + limit]
+            
+            return {
+                'messages': messages,
+                'total': total
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get conversation messages: {e}")
+            return {"messages": [], "total": 0}
+    
     async def close(self):
         """Close DynamoDB connection"""
         if self.session:
