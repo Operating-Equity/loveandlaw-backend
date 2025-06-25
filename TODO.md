@@ -53,6 +53,10 @@
 - [ ] Create admin dashboard
 - [ ] Add analytics tracking
 - [x] ~~Add PUT endpoint for user profile updates~~ ✅ Completed - PUT /api/v1/profile/{user_id}
+- [x] ~~Add save/remove lawyer endpoints~~ ✅ Completed:
+  - POST /api/v1/profile/{user_id}/lawyers/{lawyer_id} - Save lawyer to profile
+  - DELETE /api/v1/profile/{user_id}/lawyers/{lawyer_id} - Remove lawyer from profile
+- [x] ~~Fix lawyer recommendations not being returned~~ ✅ Fixed - lawyer_cards now properly passed through to websocket
 
 
 ### Documentation

@@ -390,6 +390,35 @@ const { id, message } = await response.json();
 const response = await fetch(`${API_BASE}/api/v1/lawyers/${lawyerId}`);
 
 const lawyerDetails = await response.json();
+
+// Sample lawyer IDs for testing:
+// - 15179 (Aaron B. Eason - Memphis, TN)
+// - 15183 (Aaron Blase - Scottsdale, AZ)
+// - 15650 (Adam Barritt - Lincoln, NE)
+// - 79410 (Justin A. Law - East Greenbush, NY)
+// - 93186 (Lydia M. Law - Albany, NY)
+```
+
+#### Save Lawyer to Profile
+```javascript
+// POST /api/v1/profile/{user_id}/lawyers/{lawyer_id}
+const response = await fetch(`${API_BASE}/api/v1/profile/${userId}/lawyers/${lawyerId}`, {
+  method: 'POST'
+});
+
+const { profile } = await response.json();
+// Profile now includes the saved lawyer in saved_lawyers array
+```
+
+#### Remove Lawyer from Profile
+```javascript
+// DELETE /api/v1/profile/{user_id}/lawyers/{lawyer_id}
+const response = await fetch(`${API_BASE}/api/v1/profile/${userId}/lawyers/${lawyerId}`, {
+  method: 'DELETE'
+});
+
+const { profile } = await response.json();
+// Lawyer removed from saved_lawyers array
 ```
 
 #### Upload Lawyers CSV (Admin Only)

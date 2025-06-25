@@ -405,6 +405,144 @@ async def create_lawyer(
         raise HTTPException(status_code=500, detail=f"Error creating lawyer: {str(e)}")
 
 
+@app.post(f"/api/{settings.api_version}/profile/{{user_id}}/lawyers/{{lawyer_id}}")
+async def save_lawyer_to_profile(
+    user_id: str,
+    lawyer_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ProfileResponse:
+    """Save a lawyer to user's profile"""
+    
+    # Check authorization
+    if current_user["user_id"] != user_id and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    try:
+        # Get existing profile
+        existing_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not existing_profile:
+            # Create new profile if it doesn't exist
+            existing_profile = {
+                "user_id": user_id,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+                "saved_lawyers": []
+            }
+        
+        # Get current saved lawyers
+        saved_lawyers = existing_profile.get("saved_lawyers", [])
+        
+        # Add lawyer if not already saved
+        if lawyer_id not in saved_lawyers:
+            saved_lawyers.append(lawyer_id)
+            
+            # Update profile
+            updates = {
+                "saved_lawyers": saved_lawyers,
+                "user_id": user_id
+            }
+            
+            await dynamodb_service.update_user_profile(user_id, updates)
+        
+        # Fetch the updated profile
+        updated_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not updated_profile:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated profile")
+        
+        # Sanitize and return
+        sanitized_profile = {
+            "user_id": updated_profile["user_id"],
+            "created_at": updated_profile["created_at"],
+            "updated_at": updated_profile["updated_at"],
+            "name": updated_profile.get("name"),
+            "email": updated_profile.get("email"),
+            "preferred_avatar": updated_profile.get("preferred_avatar"),
+            "saved_lawyers": updated_profile.get("saved_lawyers", []),
+            "legal_situation": updated_profile.get("legal_situation", {}),
+            "milestones_completed": updated_profile.get("milestones_completed", []),
+            "current_goals": updated_profile.get("current_goals", []),
+            "preferences": updated_profile.get("preferences", {}),
+            "average_distress_score": updated_profile.get("average_distress_score", 5.0),
+            "average_engagement_level": updated_profile.get("average_engagement_level", 5.0)
+        }
+        
+        return ProfileResponse(profile=sanitized_profile)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving lawyer: {e}")
+        raise HTTPException(status_code=500, detail="Error saving lawyer to profile")
+
+
+@app.delete(f"/api/{settings.api_version}/profile/{{user_id}}/lawyers/{{lawyer_id}}")
+async def remove_lawyer_from_profile(
+    user_id: str,
+    lawyer_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> ProfileResponse:
+    """Remove a lawyer from user's profile"""
+    
+    # Check authorization
+    if current_user["user_id"] != user_id and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    try:
+        # Get existing profile
+        existing_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not existing_profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        # Get current saved lawyers
+        saved_lawyers = existing_profile.get("saved_lawyers", [])
+        
+        # Remove lawyer if present
+        if lawyer_id in saved_lawyers:
+            saved_lawyers.remove(lawyer_id)
+            
+            # Update profile
+            updates = {
+                "saved_lawyers": saved_lawyers,
+                "user_id": user_id
+            }
+            
+            await dynamodb_service.update_user_profile(user_id, updates)
+        
+        # Fetch the updated profile
+        updated_profile = await dynamodb_service.get_user_profile(user_id)
+        
+        if not updated_profile:
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated profile")
+        
+        # Sanitize and return
+        sanitized_profile = {
+            "user_id": updated_profile["user_id"],
+            "created_at": updated_profile["created_at"],
+            "updated_at": updated_profile["updated_at"],
+            "name": updated_profile.get("name"),
+            "email": updated_profile.get("email"),
+            "preferred_avatar": updated_profile.get("preferred_avatar"),
+            "saved_lawyers": updated_profile.get("saved_lawyers", []),
+            "legal_situation": updated_profile.get("legal_situation", {}),
+            "milestones_completed": updated_profile.get("milestones_completed", []),
+            "current_goals": updated_profile.get("current_goals", []),
+            "preferences": updated_profile.get("preferences", {}),
+            "average_distress_score": updated_profile.get("average_distress_score", 5.0),
+            "average_engagement_level": updated_profile.get("average_engagement_level", 5.0)
+        }
+        
+        return ProfileResponse(profile=sanitized_profile)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing lawyer: {e}")
+        raise HTTPException(status_code=500, detail="Error removing lawyer from profile")
+
+
 @app.get(f"/api/{settings.api_version}/lawyers/{{lawyer_id}}")
 async def get_lawyer_details(
     lawyer_id: str,

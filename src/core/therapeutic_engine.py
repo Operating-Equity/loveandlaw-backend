@@ -363,6 +363,11 @@ class TherapeuticEngine:
             state["suggestions"] = advisor_result.get("suggestions", [])
             state["show_cards"] = advisor_result.get("show_cards", False)
             
+            # Pass through lawyer cards if show_cards is True
+            if state["show_cards"] and state.get("lawyer_cards"):
+                # Already populated from matcher agent
+                pass  # lawyer_cards already in state
+            
         except Exception as e:
             logger.error(f"Error in advisor composition: {e}", exc_info=True)
             state["assistant_response"] = "I understand this is challenging. Let me help you through this. What specific aspect would you like to focus on first?"

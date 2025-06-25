@@ -331,6 +331,14 @@ The LoveAndLaw backend has been completely implemented with all core features wo
   - Created deployment script `deploy_lambda.sh` for easy updates
   - Test scripts: `test_lambda_websocket.py` (local), `test_production_websocket.py` (production)
 
+- **Save Lawyer Functionality** (January 2025):
+  - Added POST `/api/v1/profile/{user_id}/lawyers/{lawyer_id}` to save lawyers to user profile
+  - Added DELETE `/api/v1/profile/{user_id}/lawyers/{lawyer_id}` to remove lawyers from profile
+  - Both endpoints are idempotent and handle non-existent profiles gracefully
+  - Fixed lawyer cards not being returned through WebSocket by ensuring they're passed from matcher to final result
+  - Test script: `test_save_lawyer.py` to verify functionality
+  - Sample lawyer IDs provided in FRONTEND_API_GUIDE.md for testing
+
 ### Not Yet Implemented (Future Enhancements)
 - **Human mediator loop**: For complex custody disputes
 - **Voice integration**: Client-side responsibility
