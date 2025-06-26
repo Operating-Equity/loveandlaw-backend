@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Conversation API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>Love & Law API Test - Create Conversation</h1>
+    
+    <div class="test-section">
+        <h2>Test POST /api/v1/conversations</h2>
+        <p>Click the button below to test creating a new conversation:</p>
+        <button onclick="testCreateConversation()">Test Create Conversation</button>
+        <div id="result" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test with Custom Message</h2>
+        <textarea id="customMessage" rows="3" style="width: 100%;" placeholder="Enter your initial message here...">Hi, I need help with custody arrangements</textarea>
+        <br><br>
+        <button onclick="testWithCustomMessage()">Test with Custom Message</button>
+        <div id="customResult" class="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production';
+
+        async function testCreateConversation() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/conversations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        initial_message: "Hi",
+                        metadata: {
+                            source: "website",
+                            referrer: "new_chat_button"
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ ERROR (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ NETWORK ERROR\n\n${error.message}`;
+            }
+        }
+
+        async function testWithCustomMessage() {
+            const resultDiv = document.getElementById('customResult');
+            const message = document.getElementById('customMessage').value;
+            
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/conversations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        initial_message: message,
+                        metadata: {
+                            source: "website",
+                            referrer: "test_page"
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ ERROR (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ NETWORK ERROR\n\n${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
