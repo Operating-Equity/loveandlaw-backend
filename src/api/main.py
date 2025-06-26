@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -132,6 +132,8 @@ async def api_health():
 @app.post(f"/api/{settings.api_version}/match")
 async def match_lawyers(
     request: MatchRequest,
+    req: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Match lawyers based on user criteria"""
@@ -176,6 +178,8 @@ async def match_lawyers(
 
 @app.post(f"/api/{settings.api_version}/lawyers/upload")
 async def upload_lawyers(
+    req: Request,
+    response: Response,
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> LawyerUploadResponse:
@@ -246,6 +250,8 @@ async def upload_lawyers(
 @app.get(f"/api/{settings.api_version}/profile/{{user_id}}")
 async def get_profile(
     user_id: str,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> ProfileResponse:
     """Get user profile"""
@@ -290,6 +296,8 @@ async def get_profile(
 async def update_profile(
     user_id: str,
     profile_update: ProfileUpdateRequest,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> ProfileResponse:
     """Update user profile"""
@@ -352,6 +360,8 @@ async def update_profile(
 @app.post(f"/api/{settings.api_version}/lawyers")
 async def create_lawyer(
     lawyer: LawyerCreateRequest,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> LawyerCreateResponse:
     """Create a new lawyer profile (admin only)"""
@@ -410,6 +420,8 @@ async def create_lawyer(
 async def save_lawyer_to_profile(
     user_id: str,
     lawyer_id: str,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> ProfileResponse:
     """Save a lawyer to user's profile"""
@@ -482,6 +494,8 @@ async def save_lawyer_to_profile(
 async def remove_lawyer_from_profile(
     user_id: str,
     lawyer_id: str,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> ProfileResponse:
     """Remove a lawyer from user's profile"""
@@ -547,6 +561,8 @@ async def remove_lawyer_from_profile(
 @app.get(f"/api/{settings.api_version}/lawyers/{{lawyer_id}}")
 async def get_lawyer_details(
     lawyer_id: str,
+    request: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> LawyerDetailsResponse:
     """Get detailed information about a specific lawyer by ID"""
@@ -596,6 +612,8 @@ async def get_lawyer_details(
 
 @app.get(f"/api/{settings.api_version}/conversations")
 async def get_conversations(
+    request: Request,
+    response: Response,
     limit: int = 20,
     offset: int = 0,
     status: Optional[str] = None,
@@ -633,6 +651,8 @@ async def get_conversations(
 @app.post(f"/api/{settings.api_version}/conversations")
 async def create_conversation(
     request: CreateConversationRequest,
+    req: Request,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> CreateConversationResponse:
     """Create a new conversation for the authenticated user"""
@@ -700,6 +720,8 @@ async def create_conversation(
 @app.get(f"/api/{settings.api_version}/conversations/{{conversation_id}}/messages")
 async def get_conversation_messages(
     conversation_id: str,
+    request: Request,
+    response: Response,
     limit: int = 50,
     offset: int = 0,
     order: str = "asc",

@@ -63,6 +63,24 @@
         <div id="customResult" class="result" style="display: none;"></div>
     </div>
 
+    <div class="test-section">
+        <h2>Test GET Conversations</h2>
+        <p>Get all conversations (Note: Without authentication, each request gets a different user_id)</p>
+        <button onclick="testGetConversations()">Get Conversations</button>
+        <div id="getResult" class="result" style="display: none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Important Note about Authentication</h2>
+        <div class="result" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
+            <strong>⚠️ Authentication is currently in development mode:</strong><br><br>
+            - Each request without an auth token gets a DIFFERENT user_id<br>
+            - This means conversations created in one request won't appear in GET requests<br>
+            - To see your conversations, you need to use the same auth token for both POST and GET<br>
+            - Or use the WebSocket connection which maintains the session
+        </div>
+    </div>
+
     <script>
         const API_BASE = 'https://j73lfhja1d.execute-api.us-east-1.amazonaws.com/production';
 
@@ -132,6 +150,36 @@
                 if (response.ok) {
                     resultDiv.className = 'result success';
                     resultDiv.textContent = `✅ SUCCESS (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ ERROR (${response.status})\n\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ NETWORK ERROR\n\n${error.message}`;
+            }
+        }
+
+        async function testGetConversations() {
+            const resultDiv = document.getElementById('getResult');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/conversations?limit=20&offset=0`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${response.status})\n\n${JSON.stringify(data, null, 2)}\n\nNote: ${data.total === 0 ? 'No conversations found (this is expected without persistent auth)' : data.total + ' conversations found'}`;
                 } else {
                     resultDiv.className = 'result error';
                     resultDiv.textContent = `❌ ERROR (${response.status})\n\n${JSON.stringify(data, null, 2)}`;

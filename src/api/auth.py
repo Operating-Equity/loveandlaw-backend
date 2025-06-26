@@ -1,8 +1,10 @@
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import uuid
+import hashlib
 
 from src.config.settings import settings
 from src.utils.logger import get_logger
@@ -11,6 +13,9 @@ logger = get_logger(__name__)
 
 # Security scheme
 security = HTTPBearer(auto_error=False)
+
+# Session cookie name
+SESSION_COOKIE_NAME = "loveandlaw_session_id"
 
 # Lazy load Clerk auth if enabled
 _clerk_auth = None
@@ -62,24 +67,62 @@ def verify_token(token: str) -> Dict[str, Any]:
         )
 
 
+def generate_session_id() -> str:
+    """Generate a unique session ID"""
+    return str(uuid.uuid4())
+
+
+def get_user_id_from_session(session_id: str) -> str:
+    """Generate a consistent user_id from session_id"""
+    # Create a deterministic user_id from session_id
+    hash_object = hashlib.sha256(session_id.encode())
+    return f"user_{hash_object.hexdigest()[:16]}"
+
+
 async def get_current_user(
+    request: Request,
+    response: Response,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
-    """Get current authenticated user from JWT token"""
-    # TEMPORARY: Auth disabled but using Bearer token as user_id for testing
+    """Get current authenticated user from JWT token or session"""
+    
+    # First, check if user has a valid auth token
     if credentials and credentials.credentials:
-        # Use the Bearer token value directly as user_id for testing
+        # Use the Bearer token value directly as user_id
         user_id = credentials.credentials
-        logger.info(f"Auth bypassed - using Bearer token as user_id: {user_id}")
-    else:
-        # Generate default user if no token provided
-        user_id = "default_user_" + str(datetime.utcnow().timestamp())[:10]
-        logger.info(f"Auth bypassed - using generated user_id: {user_id}")
+        logger.info(f"Using Bearer token as user_id: {user_id[:20]}...")
+        return {
+            "user_id": user_id,
+            "role": "admin",
+            "scopes": ["read", "write", "admin"]
+        }
+    
+    # Second, check for session cookie
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    
+    if not session_id:
+        # Create new session
+        session_id = generate_session_id()
+        # Set cookie with appropriate settings
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=session_id,
+            max_age=30 * 24 * 60 * 60,  # 30 days
+            httponly=True,
+            samesite="none" if settings.environment == "production" else "lax",
+            secure=settings.environment == "production"  # HTTPS only in production
+        )
+        logger.info(f"Created new session: {session_id}")
+    
+    # Generate consistent user_id from session_id
+    user_id = get_user_id_from_session(session_id)
+    logger.info(f"Using session-based user_id: {user_id}")
     
     return {
         "user_id": user_id,
-        "role": "admin",
-        "scopes": ["read", "write", "admin"]
+        "role": "user",
+        "scopes": ["read", "write"],
+        "session_id": session_id
     }
     
     # Original auth code commented out for now
