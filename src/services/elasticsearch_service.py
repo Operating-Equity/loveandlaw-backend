@@ -26,7 +26,7 @@ class ElasticsearchService:
     def __init__(self):
         self.client: Optional[AsyncElasticsearch] = None
         self.index_name = "lawyers_v1"
-        self.suggest_index = "lawyers_suggest_v1"
+        self.suggest_index = "lawyers_v1"
 
     async def initialize(self):
         """Initialize Elasticsearch connection and ensure indices exist."""

@@ -286,6 +286,7 @@ resource "aws_ecs_task_definition" "main" {
       { name = "ENVIRONMENT", value = var.environment },
       { name = "AWS_REGION", value = data.aws_region.current.name },
       { name = "ELASTICSEARCH_URL", value = var.elasticsearch_endpoint },
+      { name = "ELASTICSEARCH_API_KEY", value = "V_khrZcBoCmt5YiwTBeA:b1aB9MZMgdT5miubYdS_OA" },
       { name = "REDIS_URL", value = "rediss://:${random_password.redis_auth.result}@${var.redis_endpoint}:6379" },
       { name = "DYNAMODB_CONVERSATIONS_TABLE", value = var.dynamodb_tables.conversations },
       { name = "DYNAMODB_PROFILES_TABLE", value = var.dynamodb_tables.profiles },

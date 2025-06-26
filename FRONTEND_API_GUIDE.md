@@ -397,6 +397,7 @@ const lawyerDetails = await response.json();
 // - 15650 (Adam Barritt - Lincoln, NE)
 // - 79410 (Justin A. Law - East Greenbush, NY)
 // - 93186 (Lydia M. Law - Albany, NY)
+// Note: Lawyers are indexed in 'love-and-law-001' Elasticsearch index
 ```
 
 #### Save Lawyer to Profile

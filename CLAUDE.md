@@ -319,6 +319,7 @@ The LoveAndLaw backend has been completely implemented with all core features wo
 - **Semantic Search with ELSER Model**: 
   - Index name updated to "love-and-law-001" as specified
   - Elasticsearch mapping includes semantic_text fields for profile, specialties, experience, and reviews
+  - Fixed GET /api/v1/lawyers/{lawyer_id} endpoint to use correct index name
   - New upload script `scripts/upload_semantic_data.py` processes lawyer data with semantic fields
   - Enhanced search service with `advanced_semantic_search` method using ELSER queries
   - MatcherAgent intelligently chooses between standard and semantic search based on query complexity
@@ -338,6 +339,12 @@ The LoveAndLaw backend has been completely implemented with all core features wo
   - Fixed lawyer cards not being returned through WebSocket by ensuring they're passed from matcher to final result
   - Test script: `test_save_lawyer.py` to verify functionality
   - Sample lawyer IDs provided in FRONTEND_API_GUIDE.md for testing
+
+- **API Fixes** (January 2025):
+  - Fixed GET `/api/v1/lawyers/{lawyer_id}` endpoint to use correct Elasticsearch index name (`love-and-law-001`)
+  - Fixed GET `/api/v1/conversations` to return mock data when DynamoDB is not available
+  - Fixed GET `/api/v1/conversations/{conversation_id}/messages` to return mock messages for development
+  - Test script: `test_api_fixes.py` to verify these fixes
 
 ### Not Yet Implemented (Future Enhancements)
 - **Human mediator loop**: For complex custody disputes

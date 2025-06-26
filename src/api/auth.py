@@ -66,10 +66,18 @@ async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """Get current authenticated user from JWT token"""
-    # TEMPORARY: Auth disabled for all environments
-    logger.info("Authentication bypassed - returning default user")
+    # TEMPORARY: Auth disabled but using Bearer token as user_id for testing
+    if credentials and credentials.credentials:
+        # Use the Bearer token value directly as user_id for testing
+        user_id = credentials.credentials
+        logger.info(f"Auth bypassed - using Bearer token as user_id: {user_id}")
+    else:
+        # Generate default user if no token provided
+        user_id = "default_user_" + str(datetime.utcnow().timestamp())[:10]
+        logger.info(f"Auth bypassed - using generated user_id: {user_id}")
+    
     return {
-        "user_id": "default_user_" + str(datetime.utcnow().timestamp())[:10],
+        "user_id": user_id,
         "role": "admin",
         "scopes": ["read", "write", "admin"]
     }

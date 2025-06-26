@@ -198,7 +198,10 @@ class DynamoDBService:
         """Get all conversations for a user with pagination"""
         if not self.conversation_table:
             logger.warning("DynamoDB not initialized, returning empty conversations")
-            return {"conversations": [], "total": 0}
+            return {
+                "conversations": [],
+                "total": 0
+            }
             
         try:
             # Query all turns for the user
@@ -291,7 +294,10 @@ class DynamoDBService:
         """Get all messages for a specific conversation"""
         if not self.conversation_table:
             logger.warning("DynamoDB not initialized, returning empty messages")
-            return {"messages": [], "total": 0}
+            return {
+                "messages": [],
+                "total": 0
+            }
             
         try:
             # Query all turns for the user

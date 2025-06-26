@@ -7,7 +7,7 @@ from typing import Dict, Any
 
 
 # Index name as specified in documentation
-LAWYER_INDEX_NAME = "lawyers_v1"
+LAWYER_INDEX_NAME = "love-and-law-001"
 
 LAWYER_INDEX_MAPPING: Dict[str, Any] = {
     "settings": {

@@ -558,7 +558,7 @@ async def get_lawyer_details(
         
         # Convert to response model
         response = LawyerDetailsResponse(
-            id=lawyer_data.get("id"),
+            id=str(lawyer_data.get("id")),
             name=lawyer_data.get("name", ""),
             firm=lawyer_data.get("firm"),
             profile_summary=lawyer_data.get("profile_summary"),

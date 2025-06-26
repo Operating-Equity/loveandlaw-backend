@@ -383,6 +383,10 @@ class TherapeuticEngine:
         turn_data["assistant_response"] = state.get("assistant_response", "")
         turn_data["created_at"] = datetime.utcnow().isoformat()
         
+        # Add conversation_id if present in state
+        if state.get("conversation_id"):
+            turn_data["conversation_id"] = state["conversation_id"]
+        
         # Save turn state (optional - continue if fails)
         try:
             await dynamodb_service.save_turn_state(turn_data)
