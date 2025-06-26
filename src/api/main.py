@@ -642,34 +642,41 @@ async def create_conversation(
         created_at = datetime.utcnow().isoformat()
         
         # If initial message is provided, save it as a turn
-        if request.initial_message and dynamodb_service.conversation_state_table:
-            # Redact PII from the initial message
-            redacted_text = await pii_service.redact_pii(request.initial_message)
-            
-            # Create a turn state for the initial message
-            turn_state = {
-                "turn_id": str(uuid4()),
-                "conversation_id": conversation_id,
-                "user_id": user_id,
-                "timestamp": created_at,
-                "user_text": redacted_text,
-                "assistant_response": "",  # Empty initial response
-                "stage": "listening",
-                "sentiment": "neutral",
-                "enhanced_sentiment": "neutral",
-                "distress_score": 5.0,
-                "engagement_level": 7.0,
-                "alliance_bond": 7.0,
-                "alliance_goal": 7.0,
-                "alliance_task": 7.0,
-                "legal_intent": [],
-                "facts": {},
-                "progress_markers": [],
-                "metadata": request.metadata or {}
-            }
-            
-            # Save the turn state
-            await dynamodb_service.save_turn_state(turn_state)
+        if request.initial_message:
+            try:
+                # Only save to DynamoDB if it's available
+                if hasattr(dynamodb_service, 'conversation_table') and dynamodb_service.conversation_table:
+                    # Redact PII from the initial message
+                    redacted_text = await pii_service.redact_pii(request.initial_message)
+                    
+                    # Create a turn state for the initial message
+                    turn_state = {
+                        "turn_id": str(uuid4()),
+                        "conversation_id": conversation_id,
+                        "user_id": user_id,
+                        "timestamp": created_at,
+                        "user_text": redacted_text,
+                        "assistant_response": "",  # Empty initial response
+                        "stage": "listening",
+                        "sentiment": "neutral",
+                        "enhanced_sentiment": "neutral",
+                        "distress_score": 5.0,
+                        "engagement_level": 7.0,
+                        "alliance_bond": 7.0,
+                        "alliance_goal": 7.0,
+                        "alliance_task": 7.0,
+                        "legal_intent": [],
+                        "facts": {},
+                        "progress_markers": [],
+                        "metadata": request.metadata or {}
+                    }
+                    
+                    # Save the turn state
+                    await dynamodb_service.save_turn_state(turn_state)
+                else:
+                    logger.info(f"DynamoDB not available, conversation {conversation_id} created without persistence")
+            except Exception as e:
+                logger.warning(f"Failed to save initial message: {e}")
         
         # Return response with WebSocket URL
         # Use the request host if available, otherwise use settings
