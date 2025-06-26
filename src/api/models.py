@@ -108,6 +108,20 @@ class LawyerCreateResponse(BaseModel):
     message: str = "Lawyer created successfully"
 
 
+class CreateConversationRequest(BaseModel):
+    """Request model for creating a new conversation"""
+    initial_message: Optional[str] = Field(None, description="Optional initial message to start the conversation")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Optional metadata about the conversation")
+
+
+class CreateConversationResponse(BaseModel):
+    """Response model for conversation creation"""
+    conversation_id: str
+    created_at: str
+    message: str = "Conversation created successfully"
+    websocket_url: Optional[str] = Field(None, description="WebSocket URL to connect to for this conversation")
+
+
 class ConversationSummary(BaseModel):
     """Summary of a conversation"""
     conversation_id: str

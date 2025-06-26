@@ -15,7 +15,8 @@ from src.services.database import initialize_databases, close_databases, elastic
 from src.api.models import (
     MatchRequest, LawyerUploadResponse, ProfileResponse, ProfileUpdateRequest, 
     LawyerDetailsResponse, LawyerCreateRequest, LawyerCreateResponse,
-    ConversationSummary, ConversationsListResponse, ConversationMessage, ConversationMessagesResponse
+    ConversationSummary, ConversationsListResponse, ConversationMessage, ConversationMessagesResponse,
+    CreateConversationRequest, CreateConversationResponse
 )
 from src.api.auth import get_current_user
 from src.api.websocket_internal import router as websocket_internal_router
@@ -627,6 +628,68 @@ async def get_conversations(
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}")
         raise HTTPException(status_code=500, detail="Error fetching conversations")
+
+
+@app.post(f"/api/{settings.api_version}/conversations")
+async def create_conversation(
+    request: CreateConversationRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> CreateConversationResponse:
+    """Create a new conversation for the authenticated user"""
+    try:
+        user_id = current_user["user_id"]
+        conversation_id = str(uuid4())
+        created_at = datetime.utcnow().isoformat()
+        
+        # If initial message is provided, save it as a turn
+        if request.initial_message and dynamodb_service.available:
+            # Redact PII from the initial message
+            redacted_text = await pii_service.redact_pii(request.initial_message)
+            
+            # Create a turn state for the initial message
+            turn_state = {
+                "turn_id": str(uuid4()),
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "timestamp": created_at,
+                "user_text": redacted_text,
+                "assistant_response": "",  # Empty initial response
+                "stage": "listening",
+                "sentiment": "neutral",
+                "enhanced_sentiment": "neutral",
+                "distress_score": 5.0,
+                "engagement_level": 7.0,
+                "alliance_bond": 7.0,
+                "alliance_goal": 7.0,
+                "alliance_task": 7.0,
+                "legal_intent": [],
+                "facts": {},
+                "progress_markers": [],
+                "metadata": request.metadata or {}
+            }
+            
+            # Save the turn state
+            await dynamodb_service.save_turn_state(turn_state)
+        
+        # Return response with WebSocket URL
+        # Use the request host if available, otherwise use settings
+        host = settings.api_host
+        if host == "localhost:8000":
+            # For local development
+            websocket_url = f"ws://localhost:8000/ws?conversation_id={conversation_id}"
+        else:
+            # For production
+            websocket_url = f"wss://{host}/ws?conversation_id={conversation_id}"
+        
+        return CreateConversationResponse(
+            conversation_id=conversation_id,
+            created_at=created_at,
+            websocket_url=websocket_url
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating conversation: {e}")
+        raise HTTPException(status_code=500, detail="Error creating conversation")
 
 
 @app.get(f"/api/{settings.api_version}/conversations/{{conversation_id}}/messages")

@@ -480,6 +480,34 @@ const response = await fetch(`${API_BASE}/api/v1/profile/${userId}`, {
 
 ### 4. Conversation Management
 
+#### Create New Conversation
+```javascript
+// POST /api/v1/conversations
+const response = await fetch(`${API_BASE}/api/v1/conversations`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    initial_message: 'Hi, I need help with custody arrangements',
+    metadata: {
+      source: 'website',
+      referrer: 'new_chat_button'
+    }
+  })
+});
+
+const { conversation_id, created_at, websocket_url } = await response.json();
+
+// Response:
+// {
+//   "conversation_id": "uuid-here",
+//   "created_at": "2025-01-26T...",
+//   "message": "Conversation created successfully",
+//   "websocket_url": "wss://domain/ws?conversation_id=uuid-here"
+// }
+```
+
 #### Get All Conversations
 ```javascript
 // GET /api/v1/conversations
