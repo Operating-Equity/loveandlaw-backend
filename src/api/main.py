@@ -679,14 +679,12 @@ async def create_conversation(
                 logger.warning(f"Failed to save initial message: {e}")
         
         # Return response with WebSocket URL
-        # Use the request host if available, otherwise use settings
-        host = settings.api_host
-        if host == "localhost:8000":
+        # For production, use the known WebSocket API Gateway URL
+        if settings.environment == "production":
+            websocket_url = f"wss://vduwddf9yg.execute-api.us-east-1.amazonaws.com/production?conversation_id={conversation_id}"
+        else:
             # For local development
             websocket_url = f"ws://localhost:8000/ws?conversation_id={conversation_id}"
-        else:
-            # For production
-            websocket_url = f"wss://{host}/ws?conversation_id={conversation_id}"
         
         return CreateConversationResponse(
             conversation_id=conversation_id,
