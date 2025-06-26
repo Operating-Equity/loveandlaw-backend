@@ -642,7 +642,7 @@ async def create_conversation(
         created_at = datetime.utcnow().isoformat()
         
         # If initial message is provided, save it as a turn
-        if request.initial_message and dynamodb_service.available:
+        if request.initial_message and dynamodb_service.conversation_state_table:
             # Redact PII from the initial message
             redacted_text = await pii_service.redact_pii(request.initial_message)
             
