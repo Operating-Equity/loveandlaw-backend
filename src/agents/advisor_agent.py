@@ -62,10 +62,17 @@ class AdvisorAgent(BaseAgent):
             }
         )
         
+        # Check if we need location from user
+        needs_location = False
+        missing_info = context.get("match_info", {}).get("needed_info", [])
+        if missing_info and "location" in missing_info and not state.facts.get("zip"):
+            needs_location = True
+        
         return {
             "assistant_response": final_response,
             "suggestions": suggestions,
-            "show_cards": len(lawyer_cards) > 0 and state.distress_score < 7
+            "show_cards": len(lawyer_cards) > 0 and state.distress_score < 7,
+            "needs_location": needs_location
         }
     
     async def _compose_adaptive_response(
@@ -101,21 +108,41 @@ Components available:
 4. Missing information for matching: {missing_info if missing_info else 'None'}
 5. Reflection needed: {reflection_data['needs_reflection']} (type: {reflection_data.get('reflection_type', 'none')})
 
-Adaptive Empathy Rules:
+FORMATTING REQUIREMENTS:
+- Use clear paragraph breaks between thoughts
+- Keep paragraphs to 2-3 sentences maximum
+- Use **bold** for important terms or next steps
+- Use bullet points when listing multiple items:
+  • Like this for options
+  • Or steps to take
+- Use numbered lists for sequential steps:
+  1. First step
+  2. Second step
+
+CONTENT RULES:
 - If missing information exists: Naturally ask about ONE piece of missing info (don't overwhelm)
 - If distress >= 7: Focus on emotional support, minimal practical advice
 - If engagement <= 3: Use open questions, offer choices, increase warmth
 - If any alliance score <= 4: Rebuild connection before advice
-- If reflection is needed: Incorporate one reflection prompt naturally into the response
-- Always end with autonomy-preserving choice (what they'd like to focus on)
+- If reflection is needed: Incorporate one reflection prompt naturally
+- Always end with an autonomy-preserving choice question
 
-Response structure:
+RESPONSE STRUCTURE:
 1. Start with empathetic acknowledgment (use/adapt the listener draft)
 2. {self._get_middle_section_guidance(strategy)}
 3. If missing info exists, naturally weave in a question about it
-4. End with choice-based question
+4. End with choice-based question like:
+   - "Would you like to explore [option A] or [option B]?"
+   - "What feels most important to address first?"
+   - "How can I best support you with this?"
 
-Keep response under 200 words."""
+TONE:
+- Conversational and warm, not robotic
+- Use "I" statements: "I understand this is difficult"
+- Avoid passive voice
+- Use simple, clear language
+
+Keep response under 200 words unless explaining complex legal concepts."""
 
         # Add reflection context if needed
         reflection_context = ""
@@ -233,53 +260,132 @@ Craft a response following the adaptive empathy rules and structure above.
         """Generate contextual suggestions for user"""
         
         suggestions = []
+        shown_suggestions = context.get("shown_suggestions", [])
+        
+        # Helper function to add suggestion if not recently shown
+        def add_if_new(suggestion: str):
+            if suggestion not in shown_suggestions:
+                suggestions.append(suggestion)
+        
+        # Dynamic suggestions pool to ensure variety
+        suggestion_pools = {
+            "location_missing": [
+                "I'm in [city, state]",
+                "I live in [city name]",
+                "My location is [state]",
+                "I'm located in [city, state]"
+            ],
+            "budget_missing": [
+                "My budget is around $[amount]",
+                "I can afford $[amount] per month",
+                "I'm looking for pro bono help",
+                "What are typical lawyer fees?"
+            ],
+            "timeline_missing": [
+                "I need help within [timeframe]",
+                "This is urgent - I need help ASAP",
+                "I have [number] weeks to respond",
+                "When should I start this process?"
+            ],
+            "divorce_questions": [
+                "What are the steps to file for divorce in my state?",
+                "How is property divided in a divorce?",
+                "What documents do I need to gather?",
+                "How long does divorce typically take?",
+                "Do I need a lawyer to file for divorce?",
+                "What's the difference between contested and uncontested divorce?",
+                "How much does divorce cost in my state?"
+            ],
+            "custody_questions": [
+                "What factors determine child custody?",
+                "How do I document my parenting time?",
+                "What's the difference between legal and physical custody?",
+                "Can I modify an existing custody order?",
+                "How do courts decide what's best for children?",
+                "What rights do grandparents have?",
+                "How does relocation affect custody?"
+            ],
+            "emotional_support": [
+                "I need help managing my anxiety about this",
+                "Can you help me break this down into smaller steps?",
+                "What support resources are available?",
+                "How do others cope with this situation?",
+                "I'm feeling overwhelmed - what should I focus on first?",
+                "Are there support groups for people like me?",
+                "How can I stay strong for my children?"
+            ],
+            "general_help": [
+                "Find lawyers near me",
+                "What are my legal options?",
+                "How do I know if I need a lawyer?",
+                "What questions should I ask a lawyer?",
+                "What are my rights in this situation?"
+            ]
+        }
         
         # Check for missing info first
         missing_info = context.get("match_info", {}).get("needed_info", [])
         if missing_info:
-            # Add questions about missing info
-            if "location" in missing_info:
-                suggestions.append("I'm in [city, state]")
-            if "budget" in missing_info:
-                suggestions.append("My budget is around $[amount]")
-            if "timeline" in missing_info:
-                suggestions.append("I need help within [timeframe]")
-            if "family details" in missing_info:
-                suggestions.append("I have [number] children")
+            if "location" in missing_info and "location_missing" in suggestion_pools:
+                # Pick suggestions not recently shown
+                for sugg in suggestion_pools["location_missing"]:
+                    if sugg not in shown_suggestions:
+                        add_if_new(sugg)
+                        break
+            if "budget" in missing_info and "budget_missing" in suggestion_pools:
+                for sugg in suggestion_pools["budget_missing"]:
+                    if sugg not in shown_suggestions:
+                        add_if_new(sugg)
+                        break
+            if "timeline" in missing_info and "timeline_missing" in suggestion_pools:
+                for sugg in suggestion_pools["timeline_missing"]:
+                    if sugg not in shown_suggestions:
+                        add_if_new(sugg)
+                        break
         
         # Add reflection prompts if available (prioritize these)
         if reflection_prompts and len(suggestions) < 3:
-            suggestions.extend(reflection_prompts[:2])
+            for prompt in reflection_prompts[:2]:
+                add_if_new(prompt)
         
-        # Based on legal intent
+        # Based on legal intent - select non-repeated suggestions
         if "divorce" in state.legal_intent:
-            suggestions.extend([
-                "What are the steps to file for divorce in my state?",
-                "How is property divided in a divorce?",
-                "What documents do I need to gather?"
-            ])
+            available_divorce_q = [q for q in suggestion_pools["divorce_questions"] if q not in shown_suggestions]
+            if available_divorce_q:
+                # Add up to 2 new divorce questions
+                for q in available_divorce_q[:2]:
+                    add_if_new(q)
         
         if "custody" in state.legal_intent:
-            suggestions.extend([
-                "What factors determine child custody?",
-                "How do I document my parenting time?",
-                "What's the difference between legal and physical custody?"
-            ])
+            available_custody_q = [q for q in suggestion_pools["custody_questions"] if q not in shown_suggestions]
+            if available_custody_q:
+                # Add up to 2 new custody questions
+                for q in available_custody_q[:2]:
+                    add_if_new(q)
         
         # Based on emotional state
         if state.distress_score >= 6:
-            suggestions.extend([
-                "I need help managing my anxiety about this",
-                "Can you help me break this down into smaller steps?",
-                "What support resources are available?"
-            ])
+            available_emotional = [q for q in suggestion_pools["emotional_support"] if q not in shown_suggestions]
+            if available_emotional:
+                add_if_new(available_emotional[0])
         
-        # Based on stage
-        if not state.facts.get("zip"):
-            suggestions.append("Find lawyers near me")
+        # General suggestions if we need more
+        if len(suggestions) < 3:
+            available_general = [q for q in suggestion_pools["general_help"] if q not in shown_suggestions]
+            for q in available_general:
+                add_if_new(q)
+                if len(suggestions) >= 5:
+                    break
         
-        if state.facts.get("budget_range") == "$":
-            suggestions.append("What are my options for low-cost legal help?")
+        # If still not enough suggestions, add topic-specific follow-ups
+        if len(suggestions) < 3:
+            # Add contextual follow-ups based on conversation
+            if state.facts.get("has_children"):
+                add_if_new("How will this affect my children?")
+            if state.facts.get("married_years"):
+                add_if_new("Does length of marriage affect my case?")
+            if any(word in state.user_text.lower() for word in ["scared", "afraid", "worried"]):
+                add_if_new("What should I do if I feel unsafe?")
         
         # Limit to 5 suggestions
         return suggestions[:5]

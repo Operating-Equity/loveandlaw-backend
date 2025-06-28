@@ -9,9 +9,11 @@ from typing import Dict, Any, List, Optional
 import asyncio
 import json
 from datetime import datetime
+from uuid import uuid4
 
 from src.core.therapeutic_engine import therapeutic_engine
 from src.services.pii_redaction import pii_service
+from src.models.conversation import ConversationState
 from src.utils.logger import get_logger
 from src.config.settings import settings
 
@@ -62,7 +64,11 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
             active_connections[connection_id] = {
                 "user_id": user_id,
                 "conversation_id": message.conversation_id,
-                "authenticated": True
+                "authenticated": True,
+                "conversation_state": ConversationState(
+                    user_id=user_id,
+                    conversation_id=message.conversation_id or str(uuid4())
+                )
             }
             
             return WebSocketResponse(message={
@@ -84,10 +90,15 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
             
             # Auto-authenticate in debug mode
             if settings.debug and not conn_info.get("authenticated"):
+                conversation_id = message.conversation_id or "debug_conversation"
                 conn_info = {
                     "user_id": "debug_user",
-                    "conversation_id": message.conversation_id or "debug_conversation",
-                    "authenticated": True
+                    "conversation_id": conversation_id,
+                    "authenticated": True,
+                    "conversation_state": ConversationState(
+                        user_id="debug_user",
+                        conversation_id=conversation_id
+                    )
                 }
                 active_connections[connection_id] = conn_info
             
@@ -114,7 +125,8 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
             result = await therapeutic_engine.process_turn(
                 user_id=conn_info["user_id"],
                 user_text=redacted_text,
-                conversation_id=conn_info["conversation_id"]
+                conversation_id=conn_info["conversation_id"],
+                conversation_state=conn_info.get("conversation_state")
             )
             
             # Format response messages
@@ -137,12 +149,18 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
             })
             
             # Send lawyer cards if available
-            if result.get("lawyer_cards") and result["metrics"]["distress_score"] < 7:
+            lawyer_cards = result.get("lawyer_cards", [])
+            logger.info(f"Lawyer cards available: {len(lawyer_cards)}, Distress score: {result['metrics']['distress_score']}")
+            
+            if lawyer_cards and result["metrics"]["distress_score"] < 7:
+                logger.info(f"Sending {len(lawyer_cards)} lawyer cards to client")
                 messages_to_send.append({
                     "type": "cards",
                     "cid": message.cid,
-                    "cards": result["lawyer_cards"]
+                    "cards": lawyer_cards
                 })
+            elif lawyer_cards and result["metrics"]["distress_score"] >= 7:
+                logger.info(f"Not sending lawyer cards due to high distress score: {result['metrics']['distress_score']}")
             
             # Send reflection data if needed
             if result.get("reflection", {}).get("needs_reflection"):
@@ -153,6 +171,14 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
                     "reflection_insights": result["reflection"]["reflection_insights"]
                 })
             
+            # Send location request if needed
+            if result.get("needs_location"):
+                messages_to_send.append({
+                    "type": "location_request",
+                    "cid": message.cid,
+                    "message": "To find lawyers near you, please select your location on the map or enter your city/state."
+                })
+            
             # Send suggestions
             if result.get("suggestions"):
                 messages_to_send.append({
@@ -160,6 +186,10 @@ async def handle_websocket_message(message: WebSocketMessage) -> WebSocketRespon
                     "cid": message.cid,
                     "suggestions": result["suggestions"]
                 })
+                
+                # Track shown suggestions in conversation state
+                if conn_info.get("conversation_state"):
+                    conn_info["conversation_state"].shown_suggestions.extend(result["suggestions"])
             
             # Send metrics in debug mode
             if settings.debug:

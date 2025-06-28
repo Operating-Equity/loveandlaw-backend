@@ -199,15 +199,25 @@ Provide a concise, factual response:"""
         ])
         
         synthesis_prompt = f"""Synthesize this legal research into clear, actionable guidance.
-Make it specific to the user's situation.
-Use plain language, avoid jargon.
-Focus on next steps and important considerations.
+
+FORMATTING REQUIREMENTS:
+- Use bullet points for key points or options
+- Bold important terms with **text**
+- Keep paragraphs short (2-3 sentences)
+- Use numbered lists for sequential steps
+
+CONTENT REQUIREMENTS:
+- Make it specific to the user's situation
+- Use plain, conversational language - no legal jargon
+- Focus on practical next steps
+- Highlight what's most important for their case
+- Include relevant timelines or deadlines if applicable
 
 User situation: {state.user_text}
 Research findings:
 {all_findings}
 
-Provide a brief, practical summary (2-3 paragraphs):"""
+Provide a clear, well-formatted summary that's easy to scan and understand:"""
 
         try:
             response = await self.groq_client.chat.completions.create(

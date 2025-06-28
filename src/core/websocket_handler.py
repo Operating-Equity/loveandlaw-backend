@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from src.core.therapeutic_engine import therapeutic_engine
 from src.services.pii_redaction import pii_service
-from src.models.conversation import WebSocketMessage
+from src.models.conversation import WebSocketMessage, ConversationState
 from src.utils.logger import get_logger
 from src.config.settings import settings
 
@@ -26,6 +26,7 @@ class WebSocketConnection:
         self.authenticated: bool = False
         self.heartbeat_task: Optional[asyncio.Task] = None
         self.last_activity: datetime = datetime.utcnow()
+        self.conversation_state: Optional[ConversationState] = None
     
     async def start_heartbeat(self):
         """Start heartbeat to keep connection alive"""
@@ -151,6 +152,12 @@ class ChatEdgeService:
         connection.authenticated = True
         connection.conversation_id = message.get("conversation_id") or str(uuid4())
         
+        # Initialize conversation state
+        connection.conversation_state = ConversationState(
+            user_id=user_id,
+            conversation_id=connection.conversation_id
+        )
+        
         # Track user connection
         if user_id not in self.user_connections:
             self.user_connections[user_id] = set()
@@ -171,6 +178,12 @@ class ChatEdgeService:
             connection.authenticated = True
             connection.conversation_id = str(uuid4())
             logger.info(f"Development mode: Auto-authenticated user {connection.user_id}")
+            
+            # Initialize conversation state for dev mode
+            connection.conversation_state = ConversationState(
+                user_id=connection.user_id,
+                conversation_id=connection.conversation_id
+            )
         
         if not connection.authenticated:
             await connection.send_message({
@@ -207,7 +220,8 @@ class ChatEdgeService:
             result = await therapeutic_engine.process_turn(
                 user_id=connection.user_id,
                 user_text=redacted_text,
-                conversation_id=connection.conversation_id
+                conversation_id=connection.conversation_id,
+                conversation_state=connection.conversation_state
             )
             
             # Validate result structure
@@ -274,12 +288,18 @@ class ChatEdgeService:
         })
         
         # Send lawyer cards if available
-        if result.get("lawyer_cards") and result["metrics"]["distress_score"] < 7:
+        lawyer_cards = result.get("lawyer_cards", [])
+        logger.info(f"Lawyer cards available: {len(lawyer_cards)}, Distress score: {result['metrics']['distress_score']}")
+        
+        if lawyer_cards and result["metrics"]["distress_score"] < 7:
+            logger.info(f"Sending {len(lawyer_cards)} lawyer cards to client")
             await connection.send_message({
                 "type": "cards",
                 "cid": cid,
-                "cards": result["lawyer_cards"]
+                "cards": lawyer_cards
             })
+        elif lawyer_cards and result["metrics"]["distress_score"] >= 7:
+            logger.info(f"Not sending lawyer cards due to high distress score: {result['metrics']['distress_score']}")
         
         # Send reflection data if needed
         if result.get("reflection", {}).get("needs_reflection"):
@@ -290,6 +310,14 @@ class ChatEdgeService:
                 "reflection_insights": result["reflection"]["reflection_insights"]
             })
         
+        # Send location request if needed
+        if result.get("needs_location"):
+            await connection.send_message({
+                "type": "location_request",
+                "cid": cid,
+                "message": "To find lawyers near you, please select your location on the map or enter your city/state."
+            })
+        
         # Send suggestions
         if result.get("suggestions"):
             await connection.send_message({
@@ -297,6 +325,10 @@ class ChatEdgeService:
                 "cid": cid,
                 "suggestions": result["suggestions"]
             })
+            
+            # Track shown suggestions in conversation state
+            if connection.conversation_state:
+                connection.conversation_state.shown_suggestions.extend(result["suggestions"])
         
         # Send metrics (for debugging/monitoring)
         if settings.debug:

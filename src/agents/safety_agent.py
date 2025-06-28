@@ -107,6 +107,10 @@ Answer:"""
         """Calculate distress score from 0-10"""
         score = 0.0
         
+        # Baseline stress for family law context (minimum 2.0)
+        # Anyone seeking family law help is experiencing some stress
+        score = 2.0
+        
         # Check distress indicators
         for level, indicators in self.distress_indicators.items():
             for indicator in indicators:
@@ -125,11 +129,19 @@ Answer:"""
         # Use LLM for nuanced assessment
         try:
             prompt = f"""Rate the emotional distress level in this message from 0-10.
-0 = No distress
-5 = Moderate distress
+0 = No distress, completely calm
+5 = Moderate distress, manageable stress
 10 = Severe distress/crisis
 
-Consider: emotional language, hopelessness, overwhelm, coping ability.
+IMPORTANT CONTEXT: This user is seeking family law assistance (divorce, custody, etc.), 
+which is inherently stressful. Even factual statements should be evaluated in this context.
+
+Consider:
+- Emotional language and tone
+- Signs of hopelessness or overwhelm
+- Coping ability indicators
+- The inherent stress of family legal issues
+- Whether they're providing information calmly or with underlying distress
 
 Message: {text}
 
@@ -145,7 +157,8 @@ Return ONLY a number from 0-10:"""
             llm_score = float(response.choices[0].message.content.strip())
             
             # Combine scores (weighted average)
-            final_score = (score * 0.3 + llm_score * 0.7)
+            # Ensure we maintain a minimum baseline of 2.0 for family law context
+            final_score = max(2.0, (score * 0.3 + llm_score * 0.7))
             
         except Exception as e:
             logger.error(f"Error in distress scoring: {e}")

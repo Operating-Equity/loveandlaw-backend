@@ -132,7 +132,8 @@ class TherapeuticEngine:
         self, 
         user_id: str, 
         user_text: str,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        conversation_state: Optional[ConversationState] = None
     ) -> Dict[str, Any]:
         """Process a conversation turn through the therapeutic engine"""
         
@@ -150,6 +151,7 @@ class TherapeuticEngine:
             "turn_state": turn_state_dict,
             "user_id": user_id,
             "conversation_id": conversation_id,
+            "conversation_state": conversation_state,
             "context": {}
         }
         
@@ -164,11 +166,18 @@ class TherapeuticEngine:
             result = await self.app.ainvoke(graph_input, config)
             
             # Extract key outputs
+            # Convert lawyer cards to dicts if they exist
+            lawyer_cards = result.get("lawyer_cards", [])
+            if lawyer_cards:
+                # Convert LawyerCard objects to dicts for JSON serialization
+                lawyer_cards = [card.dict() if hasattr(card, 'dict') else card for card in lawyer_cards]
+                logger.info(f"Returning {len(lawyer_cards)} lawyer cards from therapeutic engine")
+            
             return {
                 "turn_id": result["turn_state"]["turn_id"],
                 "assistant_response": result.get("assistant_response", ""),
                 "suggestions": result.get("suggestions", []),
-                "lawyer_cards": result.get("lawyer_cards", []),
+                "lawyer_cards": lawyer_cards,
                 "stage": result["turn_state"]["stage"],
                 "metrics": {
                     "distress_score": result["turn_state"]["distress_score"],
@@ -188,7 +197,8 @@ class TherapeuticEngine:
                     "reflection_insights": result.get("reflection_insights", [])
                 },
                 "legal_intent": result["turn_state"].get("legal_intent", []),
-                "active_legal_specialist": result.get("active_legal_specialist")
+                "active_legal_specialist": result.get("active_legal_specialist"),
+                "needs_location": result.get("needs_location", False)
             }
             
         except Exception as e:
@@ -325,6 +335,12 @@ class TherapeuticEngine:
         
         turn_state = TurnState(**state["turn_state"])
         
+        # Get conversation state to track shown suggestions
+        conversation_state = state.get("conversation_state")
+        shown_suggestions = []
+        if conversation_state and hasattr(conversation_state, 'shown_suggestions'):
+            shown_suggestions = conversation_state.shown_suggestions
+        
         # Prepare advisor context
         advisor_context = {
             **state["context"],
@@ -343,7 +359,8 @@ class TherapeuticEngine:
             "legal_intake_result": state.get("legal_intake_result", {}),
             "legal_question": state.get("legal_question", ""),
             "case_info": state.get("case_info", {}),
-            "active_legal_specialist": state.get("active_legal_specialist")
+            "active_legal_specialist": state.get("active_legal_specialist"),
+            "shown_suggestions": shown_suggestions  # Pass suggestion history
         }
         
         # Get final response
@@ -362,11 +379,17 @@ class TherapeuticEngine:
             state["assistant_response"] = advisor_result.get("assistant_response", "I'm here to help. Could you share more about what's happening?")
             state["suggestions"] = advisor_result.get("suggestions", [])
             state["show_cards"] = advisor_result.get("show_cards", False)
+            state["needs_location"] = advisor_result.get("needs_location", False)
             
             # Pass through lawyer cards if show_cards is True
             if state["show_cards"] and state.get("lawyer_cards"):
                 # Already populated from matcher agent
-                pass  # lawyer_cards already in state
+                logger.info(f"Advisor show_cards=True, passing through {len(state.get('lawyer_cards', []))} lawyer cards")
+            else:
+                # If show_cards is False or no cards, clear them
+                if not state["show_cards"]:
+                    logger.info("Advisor show_cards=False, clearing lawyer cards")
+                    state["lawyer_cards"] = []
             
         except Exception as e:
             logger.error(f"Error in advisor composition: {e}", exc_info=True)
@@ -424,8 +447,8 @@ class TherapeuticEngine:
         
         # Run matcher if:
         # 1. User explicitly asks for lawyer OR
-        # 2. We have legal intent AND it's not the first turn
-        should_match = has_match_keywords or (has_legal_intent and turn_count > 0)
+        # 2. We have legal intent (removed turn count restriction to allow first-turn matching)
+        should_match = has_match_keywords or has_legal_intent
         logger.info(f"Should match lawyers: {should_match} (keywords={has_match_keywords}, intent={has_legal_intent}, turn={turn_count})")
         return should_match
     

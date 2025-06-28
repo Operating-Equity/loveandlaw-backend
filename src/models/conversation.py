@@ -61,7 +61,7 @@ class LawyerCard(BaseModel):
 
 
 class WebSocketMessage(BaseModel):
-    type: Literal["user_msg", "ai_chunk", "cards", "suggestions", "heartbeat", "error", "session_end"]
+    type: Literal["user_msg", "ai_chunk", "cards", "suggestions", "heartbeat", "error", "session_end", "location_request", "reflection"]
     cid: Optional[str] = None
     text: Optional[str] = None
     text_fragment: Optional[str] = None
@@ -69,6 +69,9 @@ class WebSocketMessage(BaseModel):
     suggestions: Optional[List[str]] = None
     code: Optional[str] = None
     message: Optional[str] = None
+    location_data: Optional[Dict[str, Any]] = None  # For location_request type
+    reflection_type: Optional[str] = None
+    reflection_insights: Optional[List[str]] = None
 
 
 class ConversationState(BaseModel):
@@ -79,6 +82,7 @@ class ConversationState(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    shown_suggestions: List[str] = Field(default_factory=list)  # Track all suggestions shown in conversation
     
     class Config:
         json_encoders = {
