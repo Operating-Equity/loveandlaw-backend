@@ -293,6 +293,9 @@ class LawyerDataLoader:
 
             # Scorecards
             doc['scorecards'] = self._calculate_scorecards(lawyer)
+            
+            # Extract addresses from source data
+            doc['addresses'] = self._extract_addresses(lawyer_id)
 
             transformed_lawyers.append(doc)
 
@@ -431,6 +434,87 @@ class LawyerDataLoader:
                     urls[source] = data['link']
 
         return urls
+    
+    def _extract_addresses(self, lawyer_id: int) -> List[Dict[str, Any]]:
+        """Extract address information from geocoded_addresses field."""
+        addresses = []
+        
+        if lawyer_id in self.source_data:
+            for source, data in self.source_data[lawyer_id].items():
+                if data.get('geocoded_addresses'):
+                    geocoded = data['geocoded_addresses']
+                    if isinstance(geocoded, list):
+                        for addr_data in geocoded:
+                            if isinstance(addr_data, dict):
+                                address = self._parse_geocoded_address(addr_data)
+                                if address:
+                                    addresses.append(address)
+                    elif isinstance(geocoded, dict):
+                        address = self._parse_geocoded_address(geocoded)
+                        if address:
+                            addresses.append(address)
+        
+        # Also add the main city/state as a fallback address
+        if lawyer_id in self.merged_lawyers:
+            lawyer = self.merged_lawyers[lawyer_id]
+            if lawyer.get('city') and lawyer.get('state'):
+                main_address = {
+                    'city': lawyer['city'],
+                    'state': lawyer['state'],
+                    'formatted_address': f"{lawyer['city']}, {lawyer['state']}"
+                }
+                if lawyer_id in self.locations:
+                    main_address['location'] = self.locations[lawyer_id]
+                addresses.append(main_address)
+        
+        return addresses
+    
+    def _parse_geocoded_address(self, addr_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Parse a single geocoded address."""
+        if not addr_data:
+            return None
+            
+        address = {}
+        
+        # Extract formatted address
+        if 'formatted_address' in addr_data:
+            address['formatted_address'] = addr_data['formatted_address']
+        elif 'address' in addr_data:
+            address['formatted_address'] = addr_data['address']
+            
+        # Extract components
+        if 'address_components' in addr_data:
+            components = addr_data['address_components']
+            if isinstance(components, list):
+                for comp in components:
+                    if isinstance(comp, dict):
+                        types = comp.get('types', [])
+                        if 'street_number' in types or 'route' in types:
+                            street = address.get('street', '')
+                            address['street'] = f"{street} {comp.get('long_name', '')}".strip()
+                        elif 'locality' in types:
+                            address['city'] = comp.get('long_name', '')
+                        elif 'administrative_area_level_1' in types:
+                            address['state'] = comp.get('short_name', '')
+                        elif 'postal_code' in types:
+                            address['zip'] = comp.get('long_name', '')
+                        elif 'neighborhood' in types:
+                            address['neighborhood'] = comp.get('long_name', '')
+        
+        # Extract coordinates
+        if 'geometry' in addr_data and 'location' in addr_data['geometry']:
+            loc = addr_data['geometry']['location']
+            if 'lat' in loc and 'lng' in loc:
+                address['location'] = {
+                    'lat': float(loc['lat']),
+                    'lon': float(loc['lng'])
+                }
+        
+        # Extract place_id
+        if 'place_id' in addr_data:
+            address['place_id'] = addr_data['place_id']
+            
+        return address if address else None
 
     def _calculate_scorecards(self, lawyer: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Calculate scorecard scores for specialties."""

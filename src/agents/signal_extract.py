@@ -54,11 +54,11 @@ Message: {text}
 Extract ALL information dynamically. Be creative and comprehensive. Look for:
 - Any legal issues or intents mentioned (even vaguely)
 - ALL numbers (amounts, dates, ages, counts, percentages, etc.)
-- ALL locations (cities, states, addresses, regions)
+- ALL locations (cities, states, addresses, regions, neighborhoods like "Tarzana", "Beverly Hills", etc.)
 - ALL time references (dates, durations, deadlines, "how long ago")
 - ALL people mentioned (names, relationships, roles)
 - ALL financial information (income, expenses, assets, debts, budgets)
-- ALL preferences or requirements stated
+- ALL preferences or requirements stated (including gender preferences for lawyers)
 - ALL emotional states or concerns expressed
 - ALL goals, desires, or outcomes wanted
 - ANY special circumstances or constraints
@@ -170,6 +170,10 @@ Be exhaustive. Extract EVERYTHING. Return ONLY valid JSON:"""
                         processed["zip"] = value["zip"]
                     if "state" in value:
                         processed["state"] = value["state"]
+                    if "city" in value:
+                        processed["city"] = value["city"]
+                    if "neighborhood" in value:
+                        processed["neighborhood"] = value["neighborhood"]
                 elif key == "family" and "children_count" in value:
                     processed["children_count"] = value["children_count"]
             else:

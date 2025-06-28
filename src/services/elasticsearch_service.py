@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 class ElasticsearchService:
     def __init__(self):
         self.client: Optional[AsyncElasticsearch] = None
-        self.index_name = "lawyers_v1"
-        self.suggest_index = "lawyers_v1"
+        self.index_name = "love-and-law-001"  # Updated to match mapping
+        self.suggest_index = "love-and-law-001"
 
     async def initialize(self):
         """Initialize Elasticsearch connection and ensure indices exist."""
@@ -150,7 +150,8 @@ class ElasticsearchService:
                            location: Optional[Dict[str, float]] = None,
                            distance: str = "50mi",
                            size: int = 10,
-                           use_semantic: bool = True) -> List[Dict[str, Any]]:
+                           use_semantic: bool = True,
+                           neighborhood_search: bool = False) -> List[Dict[str, Any]]:
         """
         Search for lawyers using hybrid search (keyword + semantic).
 
@@ -158,10 +159,14 @@ class ElasticsearchService:
             query_text: Text query for searching profiles
             filters: Dictionary of filters (practice_areas, state, etc.)
             location: {"lat": float, "lon": float} for geo queries
-            distance: Distance for location-based search
+            distance: Distance for location-based search (reduced for neighborhood searches)
             size: Number of results to return
             use_semantic: Whether to include semantic search
+            neighborhood_search: Whether this is a neighborhood-level search
         """
+        # Adjust distance for neighborhood searches
+        if neighborhood_search and distance == "50mi":
+            distance = "5mi"  # 5-mile radius for neighborhood searches
         query = {"bool": {"must": [], "should": [], "filter": []}}
 
         # Text search
@@ -210,6 +215,45 @@ class ElasticsearchService:
                     "location": location
                 }
             })
+        
+        # Neighborhood text search if no coordinates provided
+        elif filters and filters.get("neighborhood"):
+            neighborhood = filters["neighborhood"]
+            neighborhood_query = {
+                "bool": {
+                    "should": [
+                        # Search in addresses field
+                        {
+                            "nested": {
+                                "path": "addresses",
+                                "query": {
+                                    "multi_match": {
+                                        "query": neighborhood,
+                                        "fields": [
+                                            "addresses.formatted_address",
+                                            "addresses.street"
+                                        ],
+                                        "type": "phrase_prefix",
+                                        "boost": 2.0
+                                    }
+                                }
+                            }
+                        },
+                        # Also search in city field as neighborhoods might be listed there
+                        {
+                            "match": {
+                                "city": {
+                                    "query": neighborhood,
+                                    "fuzziness": "AUTO",
+                                    "boost": 1.0
+                                }
+                            }
+                        }
+                    ],
+                    "minimum_should_match": 1
+                }
+            }
+            query["bool"]["must"].append(neighborhood_query)
 
         # Add quality boosting factors (removed numeric comparisons that might fail with string data)
         query["bool"]["should"].extend([
@@ -217,19 +261,33 @@ class ElasticsearchService:
         ])
 
         # Execute search
+        search_body = {
+            "query": query,
+            "size": size,
+            "_source": {
+                "excludes": ["profile_embedding", "specialty_embeddings"]
+            },
+            "sort": [
+                "_score",
+                {"ratings.overall": {"order": "desc", "missing": "_last"}}
+            ]
+        }
+        
+        # Add inner hits for nested addresses to see which address matched
+        if filters and filters.get("neighborhood"):
+            if "must" in query["bool"] and query["bool"]["must"]:
+                for must_query in query["bool"]["must"]:
+                    if "bool" in must_query and "should" in must_query["bool"]:
+                        for should_query in must_query["bool"]["should"]:
+                            if "nested" in should_query:
+                                should_query["nested"]["inner_hits"] = {
+                                    "size": 1,
+                                    "_source": ["addresses.formatted_address", "addresses.city"]
+                                }
+        
         response = await self.client.search(
             index=self.index_name,
-            body={
-                "query": query,
-                "size": size,
-                "_source": {
-                    "excludes": ["profile_embedding", "specialty_embeddings"]
-                },
-                "sort": [
-                    "_score",
-                    {"ratings.overall": {"order": "desc", "missing": "_last"}}
-                ]
-            }
+            body=search_body
         )
 
         # Transform results
@@ -238,6 +296,13 @@ class ElasticsearchService:
             lawyer = hit["_source"]
             lawyer["match_score"] = hit["_score"]
             lawyer["search_explanation"] = self._generate_match_explanation(hit, query_text)
+            
+            # Add matched address info if available from inner hits
+            if "inner_hits" in hit and "addresses" in hit["inner_hits"]:
+                matched_addresses = hit["inner_hits"]["addresses"]["hits"]["hits"]
+                if matched_addresses:
+                    lawyer["matched_address"] = matched_addresses[0]["_source"]
+            
             results.append(lawyer)
 
         return results
@@ -390,6 +455,83 @@ class ElasticsearchService:
             
         return results
 
+    async def search_by_neighborhood(self,
+                                    neighborhood: str,
+                                    city: Optional[str] = None,
+                                    state: Optional[str] = None,
+                                    filters: Optional[Dict[str, Any]] = None,
+                                    size: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for lawyers by neighborhood name.
+        
+        Args:
+            neighborhood: Neighborhood name (e.g., "Tarzana", "Beverly Hills")
+            city: Optional city to narrow search
+            state: Optional state to narrow search
+            filters: Additional filters (practice areas, etc.)
+            size: Number of results
+        """
+        # Build neighborhood-specific filters
+        search_filters = filters.copy() if filters else {}
+        search_filters["neighborhood"] = neighborhood
+        
+        if city:
+            search_filters["city"] = city
+        if state:
+            search_filters["state"] = state
+            
+        # Use main search with neighborhood flag
+        return await self.search_lawyers(
+            query_text=None,
+            filters=search_filters,
+            location=None,
+            distance="5mi",  # Smaller radius for neighborhoods
+            size=size,
+            use_semantic=False,  # Exact matching for neighborhoods
+            neighborhood_search=True
+        )
+    
+    async def geocode_neighborhood(self, neighborhood: str, city: str, state: str) -> Optional[Dict[str, float]]:
+        """
+        Attempt to geocode a neighborhood to coordinates.
+        This is a placeholder - in production, use a geocoding service.
+        
+        Returns:
+            {"lat": float, "lon": float} if found, None otherwise
+        """
+        # Common LA neighborhoods with approximate coordinates
+        la_neighborhoods = {
+            "tarzana": {"lat": 34.1728, "lon": -118.5535},
+            "beverly hills": {"lat": 34.0736, "lon": -118.4004},
+            "santa monica": {"lat": 34.0195, "lon": -118.4912},
+            "venice": {"lat": 33.9850, "lon": -118.4695},
+            "hollywood": {"lat": 34.0928, "lon": -118.3287},
+            "downtown": {"lat": 34.0522, "lon": -118.2437},
+            "pasadena": {"lat": 34.1478, "lon": -118.1445},
+            "glendale": {"lat": 34.1425, "lon": -118.2551},
+            "sherman oaks": {"lat": 34.1508, "lon": -118.4489},
+            "encino": {"lat": 34.1638, "lon": -118.5033},
+            "westwood": {"lat": 34.0635, "lon": -118.4455},
+            "brentwood": {"lat": 34.0585, "lon": -118.4817},
+            "malibu": {"lat": 34.0259, "lon": -118.7798},
+            "manhattan beach": {"lat": 33.8847, "lon": -118.4109},
+            "redondo beach": {"lat": 33.8492, "lon": -118.3884},
+            "torrance": {"lat": 33.8358, "lon": -118.3406},
+            "long beach": {"lat": 33.7683, "lon": -118.1956},
+            "burbank": {"lat": 34.1808, "lon": -118.3090},
+            "culver city": {"lat": 34.0211, "lon": -118.3965},
+            "mar vista": {"lat": 34.0092, "lon": -118.4323}
+        }
+        
+        # Check if it's a known LA neighborhood
+        if city and "los angeles" in city.lower():
+            neighborhood_lower = neighborhood.lower()
+            if neighborhood_lower in la_neighborhoods:
+                return la_neighborhoods[neighborhood_lower]
+        
+        # In production, use a real geocoding service here
+        return None
+
     async def close(self):
         """Close Elasticsearch connection."""
         if self.client:
@@ -468,8 +610,8 @@ class ElasticsearchService:
                 "term": {"state": filters["state"]}
             })
 
-        # City
-        if "city" in filters:
+        # City - skip if we're doing neighborhood search
+        if "city" in filters and "neighborhood" not in filters:
             filter_queries.append({
                 "term": {"city.keyword": filters["city"]}
             })
@@ -499,6 +641,12 @@ class ElasticsearchService:
         if "min_rating" in filters:
             filter_queries.append({
                 "range": {"ratings.overall": {"gte": filters["min_rating"]}}
+            })
+
+        # Gender filter
+        if "gender" in filters:
+            filter_queries.append({
+                "term": {"gender": filters["gender"]}
             })
 
         return filter_queries

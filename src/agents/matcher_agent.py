@@ -69,7 +69,37 @@ class MatcherAgent(BaseAgent):
             return cached_results
         
         # Determine search method based on query complexity
-        if self._should_use_semantic_search(state):
+        if filters.get("neighborhood"):
+            # Use neighborhood-specific search
+            lawyers = await elasticsearch_service.search_by_neighborhood(
+                neighborhood=filters["neighborhood"],
+                city=filters.get("city"),
+                state=filters.get("state"),
+                filters={
+                    k: v for k, v in filters.items() 
+                    if k not in ["neighborhood", "city", "state"]
+                },
+                size=15  # Get more results for neighborhood searches
+            )
+            
+            # If no results with text search, try geocoding
+            if not lawyers and filters.get("city") and filters.get("state"):
+                coords = await elasticsearch_service.geocode_neighborhood(
+                    filters["neighborhood"],
+                    filters["city"],
+                    filters["state"]
+                )
+                if coords:
+                    # Retry with coordinates
+                    lawyers = await elasticsearch_service.search_lawyers(
+                        query_text=search_context.get("query"),
+                        filters={k: v for k, v in filters.items() if k != "neighborhood"},
+                        location=coords,
+                        distance="5mi",  # 5 miles for neighborhood
+                        size=15,
+                        use_semantic=False
+                    )
+        elif self._should_use_semantic_search(state):
             # Use advanced semantic search for complex natural language queries
             lawyers = await elasticsearch_service.advanced_semantic_search(
                 query_text=search_context["query"],
@@ -210,14 +240,21 @@ class MatcherAgent(BaseAgent):
         """Build filter query for Elasticsearch"""
         filters = {}
         
-        # Location filters
-        if state.facts.get("zip"):
+        # Location filters - check for neighborhood first
+        if state.facts.get("neighborhood"):
+            filters["neighborhood"] = state.facts["neighborhood"]
+            # Also include city/state if available for better filtering
+            if state.facts.get("city"):
+                filters["city"] = state.facts["city"]
+            if state.facts.get("state"):
+                filters["state"] = state.facts["state"]
+        elif state.facts.get("zip"):
             # Convert zip to coordinates if possible
             filters["location"] = self._zip_to_coordinates(state.facts["zip"])
-        elif state.facts.get("state"):
-            filters["state"] = state.facts["state"]
         elif state.facts.get("city") and state.facts.get("state"):
             filters["city"] = state.facts["city"]
+            filters["state"] = state.facts["state"]
+        elif state.facts.get("state"):
             filters["state"] = state.facts["state"]
         
         # Practice areas
@@ -255,6 +292,10 @@ class MatcherAgent(BaseAgent):
         # Quality filters
         if not state.facts.get("budget_range") or state.facts.get("budget_range") != "low":
             filters["min_rating"] = 3.5
+        
+        # Gender preference filter
+        if state.facts.get("gender_preference"):
+            filters["gender"] = state.facts["gender_preference"]
         
         return filters
     
@@ -338,18 +379,36 @@ class MatcherAgent(BaseAgent):
         cards = []
         
         for lawyer in lawyers:
+            # Build location info including neighborhood if matched
+            location_info = lawyer.get("location", {}).copy()
+            
+            # Add matched address info if available
+            if "matched_address" in lawyer:
+                matched = lawyer["matched_address"]
+                if "neighborhood" in matched:
+                    location_info["neighborhood"] = matched["neighborhood"]
+                if "formatted_address" in matched:
+                    location_info["formatted_address"] = matched["formatted_address"]
+            
+            # Always include city/state info
+            if lawyer.get("city"):
+                location_info["city"] = lawyer["city"]
+            if lawyer.get("state"):
+                location_info["state"] = lawyer["state"]
+            
             card = LawyerCard(
-                id=lawyer["id"],
+                id=str(lawyer["id"]),  # Ensure ID is string
                 name=lawyer["name"],
-                firm=lawyer["firm"],
+                firm=lawyer.get("firm", lawyer.get("name", "Independent Practice")),  # Fallback for firm
                 match_score=lawyer.get("personalized_score", lawyer.get("match_score", 0.5)),
-                blurb=lawyer.get("description", "")[:200] + "..." if len(lawyer.get("description", "")) > 200 else lawyer.get("description", ""),
+                blurb=lawyer.get("description", lawyer.get("profile_summary", ""))[:200] + "..." if len(lawyer.get("description", lawyer.get("profile_summary", ""))) > 200 else lawyer.get("description", lawyer.get("profile_summary", "")),
                 link=f"/lawyer/{lawyer['id']}",
                 practice_areas=lawyer.get("practice_areas", []),
-                location=lawyer.get("location", {}),
-                rating=lawyer.get("rating"),
-                reviews_count=lawyer.get("reviews_count"),
-                budget_range=lawyer.get("budget_range")
+                location=location_info,
+                rating=lawyer.get("rating", lawyer.get("ratings", {}).get("overall")),
+                reviews_count=lawyer.get("reviews_count", lawyer.get("ratings", {}).get("review_count")),
+                budget_range=lawyer.get("budget_range"),
+                gender=lawyer.get("gender")
             )
             cards.append(card)
         

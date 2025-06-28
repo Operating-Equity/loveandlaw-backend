@@ -249,7 +249,8 @@ class EnhancedMatcherAgent(BaseAgent):
         preference_query = {
             "budget": facts.get("budget"),
             "language": facts.get("language"),
-            "specializations": facts.get("special_needs", [])
+            "specializations": facts.get("special_needs", []),
+            "gender": facts.get("gender_preference")
         }
         
         # Determine if semantic search is needed
@@ -389,6 +390,10 @@ Focus on personality traits, approach style, and specializations that match thei
             else:
                 # It's a simple string like "$$"
                 filters["budget"] = query["preferences"]["budget"]
+        
+        # Add gender preference filter
+        if query["preferences"]["gender"]:
+            filters["gender"] = query["preferences"]["gender"]
         
         # Create query text from user's message or practice areas
         query_text = None

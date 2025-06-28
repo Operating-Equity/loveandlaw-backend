@@ -58,6 +58,7 @@ class LawyerCard(BaseModel):
     rating: Optional[float] = None
     reviews_count: Optional[int] = None
     budget_range: Optional[str] = None
+    gender: Optional[str] = None
 
 
 class WebSocketMessage(BaseModel):
