@@ -7,6 +7,7 @@ from src.agents.base import BaseAgent
 from src.agents.enhanced_matcher import EnhancedMatcherAgent, InformationCompleteness
 from src.models.conversation import TurnState, LawyerCard
 from src.services.database import elasticsearch_service, redis_service
+from src.services.intelligent_matcher_service import get_intelligent_matcher
 from src.config.settings import settings
 from src.utils.logger import get_logger
 import json
@@ -22,11 +23,33 @@ class MatcherAgent(BaseAgent):
         self.groq_client = AsyncGroq(api_key=settings.groq_api_key)
         self.cache_ttl = 3600  # 1 hour for lawyer matches
         self.enhanced_matcher = EnhancedMatcherAgent()
+        self.intelligent_matcher = get_intelligent_matcher()
     
     async def process(self, state: TurnState, context: Dict[str, Any]) -> Dict[str, Any]:
         """Match lawyers based on user needs with enhanced algorithm"""
         
-        # Use enhanced matcher for intelligent matching
+        # First, try the ultra-intelligent matching system
+        try:
+            # Check if we have enough information for intelligent matching
+            if self._has_minimal_info_for_intelligent_matching(state):
+                logger.info("Using intelligent matching system")
+                
+                # Get user profile from context
+                user_profile = context.get("user_profile", {})
+                
+                # Run intelligent matching
+                result = await self.intelligent_matcher.find_perfect_lawyers(state, user_profile)
+                
+                # If we got good matches, return them
+                if result.get("lawyer_cards") and len(result["lawyer_cards"]) > 0:
+                    logger.info(f"Intelligent matcher found {len(result['lawyer_cards'])} matches")
+                    return result
+                
+        except Exception as e:
+            logger.error(f"Intelligent matching failed: {e}")
+        
+        # Fall back to enhanced matcher
+        logger.info("Falling back to enhanced matcher")
         enhanced_state = await self.enhanced_matcher.process(state)
         
         # If enhanced matcher found matches, return them
@@ -136,6 +159,15 @@ class MatcherAgent(BaseAgent):
         await self._cache_matches(cache_key, result)
         
         return result
+    
+    def _has_minimal_info_for_intelligent_matching(self, state: TurnState) -> bool:
+        """Check if we have minimal info for intelligent matching"""
+        # Need at least some text or legal intent
+        has_text = state.user_text and len(state.user_text) > 20
+        has_intent = state.legal_intent and len(state.legal_intent) > 0
+        has_facts = state.facts and len(state.facts) > 0
+        
+        return has_text or has_intent or has_facts
     
     def _has_sufficient_info(self, state: TurnState) -> bool:
         """Check if we have enough info to match lawyers - be more thorough"""
