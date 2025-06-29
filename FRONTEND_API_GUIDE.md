@@ -2,6 +2,15 @@
 
 This guide provides comprehensive documentation for frontend engineers to integrate with the Love & Law backend APIs, including WebSocket connections, lawyer matching, and REST endpoints.
 
+## 🆕 Key Updates - Intelligent Matching System
+
+The backend now features ultra-intelligent lawyer matching that understands user needs through AI analysis. Key changes:
+
+1. **Enhanced Lawyer Cards**: `match_score` is now a float (0-1) instead of percentage string, includes `match_reasons`, `languages`, `response_time`, `free_consultation`, `payment_plans`
+2. **New Response Metadata**: When intelligent matching is used, responses include `match_reason`, `confidence_score`, `user_intent`, and `insights`
+3. **Personalized Content**: Lawyer `blurb` is now AI-personalized to explain why they're perfect for this specific user
+4. **Multi-dimensional Scoring**: Lawyers are scored on 15+ factors including cultural fit, urgency readiness, and communication style compatibility
+
 ## Table of Contents
 1. [Overview](#overview)
 2. [Environment Setup](#environment-setup)
@@ -21,8 +30,9 @@ This guide provides comprehensive documentation for frontend engineers to integr
 ## Overview
 
 The Love & Law backend provides:
-- **WebSocket API** for real-time chat conversations with AI therapeutic responses
+- **WebSocket API** for real-time chat conversations with AI therapeutic responses and intelligent lawyer matching
 - **REST API** for lawyer search, profile management, conversation history, and administrative functions
+- **Intelligent Matching Engine** that understands user needs beyond simple filters using AI analysis
 
 ### API Endpoints by Environment
 
@@ -180,8 +190,8 @@ class LoveAndLawWebSocket {
         break;
         
       case 'cards':
-        // Display lawyer recommendations
-        this.displayLawyerCards(data.cards);
+        // Display lawyer recommendations with intelligent matching
+        this.displayEnhancedLawyerCards(data);
         break;
         
       case 'suggestions':
@@ -230,7 +240,7 @@ ws.send({
    }
    ```
 
-2. **Lawyer Cards**:
+2. **Lawyer Cards** (Enhanced with Intelligent Matching):
    ```json
    {
      "type": "cards",
@@ -240,16 +250,68 @@ ws.send({
          "id": "lawyer-123",
          "name": "Jane Doe, Esq.",
          "firm": "Doe Law Firm",
-         "match_score": "92%",
-         "blurb": "Experienced in child custody cases",
+         "match_score": 0.92,  // Now a float (0-1) instead of percentage string
+         "blurb": "Jane understands your urgent custody needs and has extensive experience with cases like yours. Her compassionate approach combined with strong advocacy makes her perfect for your situation.", // AI-personalized
          "link": "/lawyer/lawyer-123",
-         "match_explanation": "Specializes in custody, near your location",
          "practice_areas": ["Family Law", "Child Custody"],
-         "location": { "city": "Chicago", "state": "IL" },
+         "location": { 
+           "city": "Chicago", 
+           "state": "IL",
+           "neighborhood": "Lincoln Park", // New: neighborhood when available
+           "formatted_address": "123 Main St, Chicago, IL 60601"
+         },
          "rating": 4.8,
          "reviews_count": 156,
-         "budget_range": "$$"
+         "budget_range": "$$",
+         
+         // New intelligent matching fields:
+         "match_reasons": [
+           "Specializes in urgent custody cases",
+           "Located in your neighborhood",
+           "Offers payment plans you requested"
+         ],
+         "languages": ["English", "Spanish"],
+         "response_time": 2, // Hours to respond
+         "free_consultation": true,
+         "payment_plans": true,
+         "cultural_match": 0.85, // When relevant
+         "availability_match": 0.95 // For urgent cases
        }
+     ],
+     
+     // New metadata when intelligent matching is used:
+     "match_reason": "intelligent_matching", // or "enhanced_matching", "standard"
+     "total_analyzed": 127, // Total lawyers considered
+     "confidence_score": 0.89, // Overall confidence in matches
+     
+     // User intent analysis:
+     "user_intent": {
+       "legal_needs": ["custody", "emergency_custody"],
+       "urgency": "immediate",
+       "communication_style": "gentle",
+       "key_preferences": {
+         "languages": ["Spanish"],
+         "gender": "female",
+         "cultural": null,
+         "budget": "$$"
+       }
+     },
+     
+     // Matching insights:
+     "insights": {
+       "match_quality": "excellent",
+       "top_factors": ["location", "urgency", "language"],
+       "recommendations": [
+         "Contact lawyers soon as availability varies",
+         "Ask about emergency motion experience"
+       ]
+     },
+     
+     // Search methods used (debug info):
+     "search_methods_used": [
+       "standard_filtered_search",
+       "personality_semantic_search",
+       "urgent_availability_search"
      ]
    }
    ```
@@ -317,7 +379,7 @@ const data = await response.json();
 
 ### 2. Lawyer Endpoints
 
-#### Search/Match Lawyers
+#### Search/Match Lawyers (Enhanced with Intelligent Matching)
 ```javascript
 // POST /api/v1/match
 const response = await fetch(`${API_BASE}/api/v1/match`, {
@@ -327,18 +389,33 @@ const response = await fetch(`${API_BASE}/api/v1/match`, {
   },
   body: JSON.stringify({
     facts: {
+      // Basic filters still work
       zip: '60601',
       city: 'Chicago',
       state: 'IL',
       practice_areas: ['divorce', 'custody'],
       budget_range: '$$',
-      search_text: 'experienced collaborative divorce'
+      
+      // Enhanced for intelligent matching:
+      search_text: 'experienced collaborative divorce lawyer who speaks Spanish',
+      
+      // New optional fields for better matching:
+      languages: ['Spanish'],
+      urgency: 'high', // 'high', 'medium', 'low'
+      communication_style: 'gentle', // 'aggressive', 'gentle', 'collaborative'
+      gender_preference: 'female',
+      cultural_background: 'Hispanic',
+      special_needs: ['payment_plans', 'evening_availability']
     },
     limit: 10
   })
 });
 
-const { cards } = await response.json();
+const result = await response.json();
+// result.cards now includes enhanced lawyer data
+// result.match_reason tells you if intelligent matching was used
+// result.user_intent shows what the AI understood
+// result.confidence_score indicates match quality
 ```
 
 #### Create Lawyer (Admin Only)
@@ -745,9 +822,66 @@ class APIClient {
    - Regular token refresh
    - Proper session management
 
+## Intelligent Matching Features
+
+### How It Works
+
+The intelligent matching system automatically activates when users provide contextual information in their messages. It:
+
+1. **Analyzes User Intent**: Understands legal needs, urgency, communication style preferences
+2. **Runs Multiple Search Strategies**: Executes up to 7 parallel searches including personality matching, cultural alignment, urgency-based availability
+3. **Scores Comprehensively**: Each lawyer is scored on 15+ dimensions including practice area fit, location, budget, communication style, cultural match
+4. **Personalizes Results**: AI writes custom explanations for why each lawyer matches
+
+### Understanding the Enhanced Response
+
+When intelligent matching is used, check these fields:
+
+```javascript
+// In your WebSocket message handler or API response
+if (data.match_reason === 'intelligent_matching') {
+  // Advanced AI matching was used
+  console.log('Confidence:', data.confidence_score);
+  console.log('User needs:', data.user_intent);
+  
+  // Show user what we understood
+  displayUserIntent(data.user_intent);
+  
+  // Display insights
+  if (data.insights.recommendations) {
+    showRecommendations(data.insights.recommendations);
+  }
+}
+
+// For each lawyer card
+data.cards.forEach(lawyer => {
+  // New: match_score is now a float (0-1)
+  const matchPercentage = Math.round(lawyer.match_score * 100);
+  
+  // New: Show why matched
+  if (lawyer.match_reasons) {
+    displayMatchReasons(lawyer.match_reasons);
+  }
+  
+  // New: Show languages if multilingual
+  if (lawyer.languages && lawyer.languages.length > 1) {
+    displayLanguageBadges(lawyer.languages);
+  }
+  
+  // New: Highlight urgent availability
+  if (lawyer.response_time <= 2) {
+    showUrgentAvailability(lawyer.response_time);
+  }
+  
+  // New: Show financial options
+  if (lawyer.free_consultation) showFreeBadge();
+  if (lawyer.payment_plans) showPaymentPlansBadge();
+});
+```
+
 ## Examples
 
-### Complete React Integration Example
+### Complete React Integration Example with Intelligent Matching
 
 ```jsx
 // hooks/useLoveAndLawAPI.js
@@ -813,6 +947,11 @@ export function useLoveAndLawChat() {
           id: `cards-${Date.now()}`,
           type: 'lawyer_cards',
           cards: data.cards,
+          // Store intelligent matching metadata
+          matchReason: data.match_reason,
+          userIntent: data.user_intent,
+          insights: data.insights,
+          confidenceScore: data.confidence_score,
           timestamp: new Date()
         }]);
         break;
@@ -895,71 +1034,165 @@ function ChatInterface() {
 }
 ```
 
-### Lawyer Search Integration
+### Enhanced Lawyer Card Component
 
 ```jsx
-// services/lawyerService.js
-class LawyerService {
-  constructor(apiBase) {
-    this.apiBase = apiBase;
-  }
-  
-  async searchLawyers(criteria) {
-    const response = await fetch(`${this.apiBase}/api/v1/match`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        facts: criteria,
-        limit: 10
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to search lawyers');
-    }
-    
-    return await response.json();
-  }
-  
-  async getLawyerDetails(lawyerId) {
-    const response = await fetch(
-      `${this.apiBase}/api/v1/lawyers/${lawyerId}`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to get lawyer details');
-    }
-    
-    return await response.json();
-  }
-}
-
-// components/LawyerSearch.jsx
-function LawyerSearch() {
-  const [lawyers, setLawyers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const lawyerService = new LawyerService(config.apiBase);
-  
-  const handleSearch = async (criteria) => {
-    setLoading(true);
-    try {
-      const { cards } = await lawyerService.searchLawyers(criteria);
-      setLawyers(cards);
-    } catch (error) {
-      console.error('Search failed:', error);
-      // Handle error
-    } finally {
-      setLoading(false);
-    }
-  };
+// components/LawyerCard.jsx
+function LawyerCard({ lawyer, isIntelligentMatch }) {
+  const matchPercentage = Math.round(lawyer.match_score * 100);
+  const isHighMatch = lawyer.match_score > 0.85;
+  const isUrgentAvailable = lawyer.response_time <= 2;
   
   return (
-    <div>
-      <SearchForm onSubmit={handleSearch} />
-      {loading && <LoadingSpinner />}
-      <LawyerGrid lawyers={lawyers} />
+    <div className={`lawyer-card ${isHighMatch ? 'high-match' : ''}`}>
+      <div className="lawyer-header">
+        <h3>{lawyer.name}</h3>
+        <span className="match-score">{matchPercentage}% Match</span>
+      </div>
+      
+      <p className="firm">{lawyer.firm}</p>
+      
+      {/* AI-personalized description */}
+      <p className="personalized-blurb">{lawyer.blurb}</p>
+      
+      {/* Match reasons (only shown with intelligent matching) */}
+      {lawyer.match_reasons && lawyer.match_reasons.length > 0 && (
+        <div className="match-reasons">
+          <h4>Why we matched you:</h4>
+          <ul>
+            {lawyer.match_reasons.map((reason, i) => (
+              <li key={i}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
+      {/* Language badges */}
+      {lawyer.languages && lawyer.languages.length > 1 && (
+        <div className="languages">
+          {lawyer.languages.map(lang => (
+            <span key={lang} className="language-badge">{lang}</span>
+          ))}
+        </div>
+      )}
+      
+      {/* Urgent availability */}
+      {isUrgentAvailable && (
+        <div className="urgent-available">
+          ⚡ Responds within {lawyer.response_time} hours
+        </div>
+      )}
+      
+      {/* Financial options */}
+      <div className="financial-options">
+        {lawyer.free_consultation && (
+          <span className="badge free-consultation">Free Consultation</span>
+        )}
+        {lawyer.payment_plans && (
+          <span className="badge payment-plans">Payment Plans</span>
+        )}
+      </div>
+      
+      <div className="lawyer-details">
+        <div className="location">
+          📍 {lawyer.location.neighborhood ? 
+            `${lawyer.location.neighborhood}, ` : ''}{lawyer.location.city}, {lawyer.location.state}
+        </div>
+        <div className="rating">
+          ⭐ {lawyer.rating} ({lawyer.reviews_count} reviews)
+        </div>
+        <div className="budget">
+          💰 {lawyer.budget_range}
+        </div>
+      </div>
+      
+      <button className="contact-button">Contact {lawyer.name}</button>
+    </div>
+  );
+}
+
+// components/MatchingInsights.jsx
+function MatchingInsights({ matchData }) {
+  if (!matchData || matchData.matchReason !== 'intelligent_matching') {
+    return null;
+  }
+  
+  return (
+    <div className="matching-insights">
+      {/* Show what AI understood */}
+      {matchData.userIntent && (
+        <div className="understood-intent">
+          <h4>We understood you need:</h4>
+          <div className="intent-badges">
+            {matchData.userIntent.legal_needs.map(need => (
+              <span key={need} className="intent-badge">{need}</span>
+            ))}
+            {matchData.userIntent.urgency && (
+              <span className={`urgency-badge ${matchData.userIntent.urgency}`}>
+                {matchData.userIntent.urgency} urgency
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Confidence score */}
+      {matchData.confidenceScore && (
+        <div className="confidence-indicator">
+          <div className="confidence-bar">
+            <div 
+              className="confidence-fill" 
+              style={{ width: `${matchData.confidenceScore * 100}%` }}
+            />
+          </div>
+          <span>Match confidence: {Math.round(matchData.confidenceScore * 100)}%</span>
+        </div>
+      )}
+      
+      {/* Insights and recommendations */}
+      {matchData.insights && (
+        <div className="insights">
+          {matchData.insights.match_quality && (
+            <p className={`quality-indicator ${matchData.insights.match_quality}`}>
+              {matchData.insights.match_quality} matches found
+            </p>
+          )}
+          
+          {matchData.insights.recommendations && (
+            <div className="recommendations">
+              <h4>Recommendations:</h4>
+              {matchData.insights.recommendations.map((rec, i) => (
+                <p key={i}>{rec}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// components/LawyerResults.jsx
+function LawyerResults({ message }) {
+  if (message.type !== 'lawyer_cards') return null;
+  
+  const isIntelligentMatch = message.matchReason === 'intelligent_matching';
+  
+  return (
+    <div className="lawyer-results">
+      {/* Show insights if intelligent matching was used */}
+      <MatchingInsights matchData={message} />
+      
+      {/* Display lawyer cards */}
+      <div className="lawyer-grid">
+        {message.cards.map(lawyer => (
+          <LawyerCard 
+            key={lawyer.id} 
+            lawyer={lawyer} 
+            isIntelligentMatch={isIntelligentMatch}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -990,6 +1223,59 @@ Enable debug mode to see additional metrics:
 // Look for messages with type: 'metrics' in WebSocket responses
 ```
 
+## Quick Reference - New Intelligent Matching Fields
+
+### Lawyer Card Fields
+```typescript
+interface LawyerCard {
+  // Changed fields:
+  match_score: number;  // Now 0-1 float, was percentage string
+  blurb: string;        // Now AI-personalized, up to 300 chars
+  
+  // New fields:
+  match_reasons?: string[];     // Why this lawyer was matched
+  languages?: string[];         // Languages spoken
+  response_time?: number;       // Hours to respond
+  free_consultation?: boolean;  // Offers free consultation
+  payment_plans?: boolean;      // Offers payment plans
+  cultural_match?: number;      // Cultural compatibility score (0-1)
+  availability_match?: number;  // Urgency availability score (0-1)
+}
+```
+
+### Response Metadata
+```typescript
+interface CardsResponse {
+  type: 'cards';
+  cards: LawyerCard[];
+  
+  // New intelligent matching metadata:
+  match_reason?: 'intelligent_matching' | 'enhanced_matching' | 'standard';
+  confidence_score?: number;    // Overall confidence (0-1)
+  total_analyzed?: number;      // Total lawyers considered
+  
+  user_intent?: {
+    legal_needs: string[];
+    urgency: 'immediate' | 'soon' | 'flexible';
+    communication_style: 'aggressive' | 'gentle' | 'collaborative' | 'balanced';
+    key_preferences: {
+      languages?: string[];
+      gender?: string;
+      cultural?: string;
+      budget?: string;
+    };
+  };
+  
+  insights?: {
+    match_quality: 'excellent' | 'good' | 'fair';
+    top_factors: string[];
+    recommendations: string[];
+  };
+  
+  search_methods_used?: string[]; // Debug info
+}
+```
+
 ## Support
 
 For issues or questions:
@@ -997,3 +1283,4 @@ For issues or questions:
 - API Changes: Check API documentation
 - Production Issues: Contact DevOps team
 - Security Concerns: Contact security team immediately
+- Intelligent Matching: See INTELLIGENT_MATCHING_GUIDE.md for deep dive
